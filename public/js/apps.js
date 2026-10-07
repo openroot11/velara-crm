@@ -17,6 +17,7 @@ export const APPS = [
     routes: [
       ['embudo', 'Embudo'],
       ['clientes', 'Clientes'],
+      ['manual', 'Manual de atención'],
     ],
     hidden: [
       ['ventas', 'Leads'],
@@ -122,12 +123,12 @@ export const APPS = [
 // de Inventario y los operarios; no ve finanzas ni el embudo comercial.
 const PRODUCCION = ['trabajos', 'produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
 export const ROUTES_BY_ROLE = {
-  admin: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
-  coordinador: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
+  admin: ['inicio', 'embudo', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
+  coordinador: ['inicio', 'embudo', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
   produccion: ['inicio', ...PRODUCCION, 'inventario', 'operarios'],
   // Un asesor opera lo suyo: su embudo comercial y el avance en producción
   // de sus clientes (el backend le filtra las OP a las de sus leads).
-  asesor: ['inicio', 'embudo', 'ventas', 'cotizaciones', 'cotizar', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
+  asesor: ['inicio', 'embudo', 'manual', 'ventas', 'cotizaciones', 'cotizar', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
 };
 
 const LABELS = { inicio: 'Inicio' };

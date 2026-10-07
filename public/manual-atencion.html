@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VELARA · Manual de atención al cliente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  Manual de atención al cliente de VELARA.
+  Adaptado del manual de la empresa de referencia (MANUAL_ATENCION_CLIENTE_NOVA_1.html):
+  misma estructura, contenido de VELARA. Los datos de la empresa, tiempos y
+  garantías deben ser iguales a los del sitio (velara/sitio/src/data) y a los del
+  CRM (Cotizaciones › Plantillas y tarifas). Ver la nota "Datos maestros de la
+  empresa" en la bóveda de Obsidian antes de cambiar uno.
+  Se sirve desde Velara CRM en /manual-atencion.html (Ventas › Manual de atención).
+-->
+<style>
+:root{
+  --ink:#0B0B0B;
+  --graphite:#252525;
+  --graphite-2:#3A3A3A;
+  --red:#D71920;
+  --red-deep:#A8141A;
+  --red-soft:#F7D9DA;
+  --paper:#F2F0EA;
+  --card:#FFFFFF;
+  --smoke:#5E6064;
+  --silver:#A7A9AC;
+  --line:#D9D7D0;
+  --amber:#C98A1B;
+  --wrap:1080px;
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;}
+h1,h2,h3,h4{margin:0;}
+p{margin:0;}
+button{font-family:inherit;cursor:pointer;}
+::selection{background:var(--red);color:#fff;}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;}
+
+/* ---------- barra superior ---------- */
+.topbar{position:sticky;top:0;z-index:50;background:var(--ink);border-bottom:3px solid var(--red);}
+.topbar-inner{max-width:var(--wrap);margin:0 auto;display:flex;align-items:center;gap:24px;padding:12px 20px;flex-wrap:wrap;}
+.brand{display:flex;flex-direction:column;line-height:1.05;flex-shrink:0;}
+.brand-name{font-weight:800;font-size:20px;color:#fff;letter-spacing:3px;}
+.brand-sub{font-size:9px;letter-spacing:2.6px;color:var(--silver);text-transform:uppercase;margin-top:3px;}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{background:none;border:none;color:#CFCFD1;font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:20px;white-space:nowrap;transition:background .15s,color .15s;}
+.tab:hover{color:#fff;}
+.tab.active{background:var(--red);color:#fff;}
+.who{display:flex;align-items:center;gap:8px;color:var(--silver);font-size:12px;}
+.who input{background:var(--graphite);border:1px solid var(--graphite-2);color:#fff;border-radius:8px;padding:6px 9px;font:inherit;font-size:12.5px;width:170px;outline:none;}
+.who input:focus{border-color:var(--red);}
+
+/* ---------- secciones ---------- */
+.view{display:none;}
+.view.active{display:block;}
+.section-wrap{max-width:var(--wrap);margin:0 auto;padding:34px 20px 70px;}
+.section-head{margin-bottom:22px;}
+.eyebrow{font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--red);font-weight:700;}
+.section-head h1{font-size:27px;font-weight:800;margin-top:4px;letter-spacing:-.3px;}
+.section-head h1::after{content:"";display:block;width:44px;height:3px;background:var(--red);margin-top:10px;}
+.section-head p{color:var(--smoke);font-size:14.5px;margin-top:10px;max-width:660px;}
+
+/* ---------- flujograma ---------- */
+#view-flujo{background:#fff;}
+#view-flujo .section-wrap{max-width:1440px;}
+.flow-canvas{margin:0 auto;overflow-x:auto;padding-bottom:6px;}
+.flow-canvas svg{width:100%;min-width:1200px;height:auto;display:block;}
+.flow-hint{text-align:center;font-size:11.5px;color:var(--silver);margin:4px 0 14px;}
+.flow-hint span{display:none;}
+@media (max-width:1180px){.flow-hint span{display:inline;}}
+.flow-legend{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+.flow-legend span{font-size:12px;color:var(--smoke);display:flex;align-items:center;gap:7px;}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+/* ---------- buscador ---------- */
+.search-box{position:relative;margin-bottom:22px;}
+.search-box input{width:100%;padding:13px 16px 13px 44px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);font:inherit;font-size:14.5px;color:var(--ink);outline:none;transition:border-color .15s;}
+.search-box input:focus{border-color:var(--red);}
+.search-box svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--silver);}
+.rr-empty{display:none;text-align:center;color:var(--silver);font-size:14px;padding:30px 0;}
+
+/* ---------- respuestas rápidas ---------- */
+.section-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.rr-add-fab{flex-shrink:0;width:40px;height:40px;border-radius:50%;margin-top:2px;display:flex;align-items:center;justify-content:center;background:var(--red);color:#fff;border:none;box-shadow:0 4px 12px rgba(215,25,32,.25);transition:background .15s,transform .15s;}
+.rr-add-fab:hover{background:var(--red-deep);transform:scale(1.05);}
+.rr-add-fab svg{transition:transform .15s;}
+.rr-add-fab.open svg{transform:rotate(45deg);}
+.rr-add-form{margin-bottom:18px;border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--card);display:flex;flex-direction:column;gap:14px;}
+.rr-add-form[hidden]{display:none;}
+.rr-add-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+.rr-add-form label,.rr-edit-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:var(--smoke);}
+.rr-add-form select,.rr-add-form input[type=text],.rr-add-form textarea,
+.rr-edit-form input[type=text],.rr-edit-form select,.rr-edit-form textarea{font:inherit;font-size:13.5px;font-weight:400;color:var(--ink);padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper);outline:none;resize:vertical;}
+.rr-add-form select:focus,.rr-add-form input:focus,.rr-add-form textarea:focus,
+.rr-edit-form input:focus,.rr-edit-form select:focus,.rr-edit-form textarea:focus{border-color:var(--red);}
+.rr-add-form input[hidden]{display:none;}
+.rr-add-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;}
+.btn{padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700;border:1.5px solid transparent;transition:background .15s,border-color .15s,color .15s;}
+.btn.ghost{background:none;border-color:var(--line);color:var(--smoke);}
+.btn.ghost:hover{border-color:var(--silver);color:var(--ink);}
+.btn.primary{background:var(--red);color:#fff;}
+.btn.primary:hover{background:var(--red-deep);}
+.btn.small{padding:7px 13px;font-size:12.5px;}
+.btn.danger{border-color:rgba(215,25,32,.35);color:var(--red);background:none;}
+.btn.danger:hover,.btn.danger.armed{background:var(--red);color:#fff;border-color:var(--red);}
+.rr-add-error{font-size:12px;color:var(--red);font-weight:600;display:none;margin-right:auto;}
+
+.cat{border:1px solid var(--line);border-radius:14px;margin-bottom:10px;background:var(--card);overflow:hidden;}
+.cat-head{width:100%;display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border:none;background:none;text-align:left;}
+.cat-head:hover{background:#FAF9F6;}
+.cat-title{display:flex;align-items:center;gap:11px;}
+.cat-title .n{font-weight:700;font-size:15px;color:var(--ink);}
+.cat-count{font-size:12px;color:var(--smoke);background:var(--paper);padding:2px 9px;border-radius:10px;}
+.chevron{transition:transform .18s;color:var(--silver);flex-shrink:0;}
+.cat.open .chevron{transform:rotate(180deg);}
+.cat-body{display:none;padding:4px 16px 16px;}
+.cat.open .rr-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:11px;}
+.cat.open .ib-body{display:flex;flex-direction:column;gap:14px;padding:4px 18px 18px;}
+
+.rr-card{border:1px solid var(--line);border-radius:12px;padding:14px 15px;background:var(--paper);display:flex;flex-direction:column;gap:9px;}
+.rr-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.rr-cmd{font-size:12.5px;font-weight:700;color:var(--red-deep);background:rgba(215,25,32,.09);padding:3px 9px;border-radius:7px;}
+.rr-tone{font-size:10.5px;color:var(--smoke);text-transform:uppercase;letter-spacing:.5px;}
+.rr-label{font-size:12.5px;color:var(--graphite);font-weight:700;}
+.rr-text{font-size:13px;color:var(--ink);white-space:pre-line;flex:1;}
+.rr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rr-copy,.rr-edit{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:none;padding:6px 11px;border-radius:8px;transition:background .15s,color .15s,border-color .15s;}
+.rr-copy{color:var(--red-deep);border:1px solid rgba(215,25,32,.3);}
+.rr-copy:hover,.rr-copy.copied{background:var(--red);color:#fff;border-color:var(--red);}
+.rr-edit{color:var(--smoke);border:1px solid var(--line);}
+.rr-edit:hover{border-color:var(--silver);color:var(--ink);}
+.badge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 6px;border-radius:6px;margin-left:7px;vertical-align:middle;}
+.badge.edited{color:var(--red-deep);background:rgba(215,25,32,.09);}
+.badge.own{color:#1F6B45;background:rgba(31,107,69,.12);}
+.rr-card.editing{grid-column:1/-1;background:var(--card);border-color:var(--red);}
+.rr-card.editing .rr-text,.rr-card.editing .rr-actions{display:none;}
+.rr-edit-form{display:none;flex-direction:column;gap:10px;}
+.rr-card.editing .rr-edit-form{display:flex;}
+.rr-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rr-edit-actions .spacer{flex:1;}
+.re-err{font-size:11.5px;color:var(--red);font-weight:600;}
+.rr-hidden-note{margin-top:14px;font-size:12.5px;color:var(--smoke);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ph{background:#FFF3C4;border-radius:4px;padding:0 3px;}
+
+/* ---------- información básica ---------- */
+.ib-card{border:1px solid var(--line);border-radius:12px;padding:16px 17px;background:var(--paper);}
+.ib-card h4{font-size:13.5px;margin-bottom:10px;color:var(--ink);}
+.ib-card p{font-size:13px;color:var(--smoke);margin-bottom:8px;}
+.ib-card p:last-child{margin-bottom:0;}
+.kv{width:100%;border-collapse:collapse;font-size:12.5px;}
+.kv td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+.kv tr:last-child td{border-bottom:none;}
+.kv td:first-child{font-weight:700;color:var(--ink);white-space:nowrap;width:34%;padding-left:0;}
+.kv td:last-child{color:var(--smoke);padding-right:0;}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--smoke);padding:0 8px 8px 0;border-bottom:1.5px solid var(--line);}
+.tbl td{padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--smoke);}
+.tbl td:first-child{font-weight:700;color:var(--ink);}
+.note{border-left:3px solid var(--amber);background:rgba(201,138,27,.09);border-radius:0 10px 10px 0;padding:11px 14px;font-size:12.5px;color:#6E4C0C;margin-top:4px;}
+.note.danger{border-left-color:var(--red);background:rgba(215,25,32,.06);color:var(--red-deep);}
+.note.tip{border-left-color:var(--graphite);background:rgba(37,37,37,.05);color:var(--graphite);}
+.list{margin:0;padding-left:18px;font-size:13px;color:var(--smoke);display:flex;flex-direction:column;gap:5px;}
+
+/* ---------- Velara CRM ---------- */
+.steps{display:flex;flex-direction:column;}
+.step-row{display:grid;grid-template-columns:44px 1fr;gap:16px;padding:20px 0;border-top:1px solid var(--line);}
+.step-row:first-child{border-top:none;padding-top:4px;}
+.step-num{width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14.5px;}
+.step-row h3{font-size:15px;margin-bottom:4px;}
+.step-row p{font-size:13.5px;color:var(--smoke);}
+.path{display:inline-block;font-size:12px;font-weight:700;color:var(--graphite);background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin:6px 0 2px;}
+.block{margin-bottom:34px;}
+.block h2{font-size:16px;margin-bottom:14px;}
+.pipeline{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.chip{padding:9px 15px;border-radius:20px;font-size:13px;font-weight:600;background:var(--card);border:1.5px solid var(--line);white-space:nowrap;}
+.chip.pos{border-color:var(--red);color:var(--red-deep);background:rgba(215,25,32,.06);}
+.chip.dark{border-color:var(--graphite);color:var(--graphite);background:rgba(37,37,37,.05);}
+.chip.neutral{color:var(--smoke);}
+.chip-arrow{color:var(--silver);font-size:15px;}
+.rule-box{border-left:3px solid var(--red);background:rgba(215,25,32,.05);border-radius:0 12px 12px 0;padding:16px 18px;}
+.rule-box p{font-size:13.5px;color:var(--ink);margin-bottom:6px;}
+.rule-box p:last-child{margin-bottom:0;}
+.rule-box b{color:var(--red-deep);}
+.foot{max-width:var(--wrap);margin:0 auto;padding:0 20px 40px;font-size:11.5px;color:var(--silver);}
+
+@media(max-width:760px){
+  .brand-name{font-size:17px;}
+  .tab{padding:8px 11px;font-size:12.5px;}
+  .who input{width:130px;}
+  .section-head h1{font-size:22px;}
+  .cat.open .rr-body{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-name">VELARA</span>
+      <span class="brand-sub">Atención al cliente</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="flujo">Flujograma</button>
+      <button class="tab" data-view="respuestas">Respuestas rápidas</button>
+      <button class="tab" data-view="info">Información básica</button>
+      <button class="tab" data-view="crm">Velara CRM</button>
+    </nav>
+    <label class="who" title="Se usa en los mensajes donde aparece {NOMBRE}. Se guarda en este navegador.">Atiende
+      <input type="text" id="who" placeholder="Su nombre">
+    </label>
+  </div>
+</div>
+
+<!-- ============ FLUJOGRAMA ============ -->
+<section id="view-flujo" class="view active">
+  <div class="section-wrap">
+    <div class="section-head">
+      <span class="eyebrow">Mapa del proceso</span>
+      <h1>Flujo de atención</h1>
+      <p>Cuatro momentos del día: inicio, entrada del cliente, cotización y seguimiento, y cierre. Todo lo que pasa con un cliente queda registrado en Velara CRM.</p>
+    </div>
+    <div class="flow-canvas"><svg viewBox="0 0 1360 700" xmlns="http://www.w3.org/2000/svg" font-family="Inter,'Segoe UI',sans-serif">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D71920"/></marker>
+  <marker id="arrowG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A7A9AC"/></marker>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5v4.7l3.3 1.9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ic-car" viewBox="0 0 24 24"><path d="M4 15l1.6-5a2 2 0 0 1 1.9-1.4h9a2 2 0 0 1 1.9 1.4L20 15v3h-2.5v-1.6h-11V18H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="14.2" r="1" fill="currentColor"/><circle cx="16" cy="14.2" r="1" fill="currentColor"/></symbol>
+  <symbol id="ic-tent" viewBox="0 0 24 24"><path d="M3 19L12 5l9 14z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 19v-6" stroke="currentColor" stroke-width="1.6"/></symbol>
+</defs>
+<rect width="1360" height="700" fill="#FFFFFF"/>
+
+<!-- paneles -->
+<g><rect x="16" y="92" width="238" height="590" rx="14" fill="#F7F6F2" stroke="#E4E1D9"/><path d="M16,106 Q16,92 30,92 L240,92 Q254,92 254,106 L254,136 L16,136 Z" fill="#D71920"/><text x="135" y="119" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="0.6" fill="#fff">INICIO DEL DÍA</text></g>
+<g><rect x="266" y="92" width="410" height="590" rx="14" fill="#F7F6F2" stroke="#E4E1D9"/><path d="M266,106 Q266,92 280,92 L662,92 Q676,92 676,106 L676,136 L266,136 Z" fill="#252525"/><text x="471" y="119" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="0.6" fill="#fff">ENTRADA DEL CLIENTE</text></g>
+<g><rect x="688" y="92" width="430" height="590" rx="14" fill="#F7F6F2" stroke="#E4E1D9"/><path d="M688,106 Q688,92 702,92 L1104,92 Q1118,92 1118,106 L1118,136 L688,136 Z" fill="#0B0B0B"/><text x="903" y="119" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="0.6" fill="#fff">COTIZACIÓN Y SEGUIMIENTO</text></g>
+<g><rect x="1130" y="92" width="214" height="590" rx="14" fill="#F7F6F2" stroke="#E4E1D9"/><path d="M1130,106 Q1130,92 1144,92 L1330,92 Q1344,92 1344,106 L1344,136 L1130,136 Z" fill="#D71920"/><text x="1237" y="119" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="0.6" fill="#fff">CIERRE Y FIN DEL DÍA</text></g>
+
+<!-- raíz -->
+<g transform="translate(500,18)"><rect width="360" height="54" rx="14" fill="#0B0B0B"/><rect x="0" y="50" width="360" height="4" fill="#D71920"/><text x="180" y="24" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="2" fill="#fff">VELARA</text><text x="180" y="41" text-anchor="middle" font-size="11" font-weight="600" letter-spacing="0.6" fill="#CFCFD1">FLUJO DE ATENCIÓN AL CLIENTE</text></g>
+<path d="M680,72 L680,82" stroke="#0B0B0B" stroke-width="2.4"/>
+<path d="M135,82 L1237,82" stroke="#0B0B0B" stroke-width="2.4"/>
+<path d="M135,82 L135,92" stroke="#0B0B0B" stroke-width="2.4" marker-end="url(#arrow)"/>
+<path d="M471,82 L471,92" stroke="#0B0B0B" stroke-width="2.4" marker-end="url(#arrow)"/>
+<path d="M903,82 L903,92" stroke="#0B0B0B" stroke-width="2.4" marker-end="url(#arrow)"/>
+<path d="M1237,82 L1237,92" stroke="#0B0B0B" stroke-width="2.4" marker-end="url(#arrow)"/>
+
+<!-- 1 · inicio del día -->
+<path d="M135,206 L135,220" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M135,276 L135,290" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M135,360 L135,374" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<g transform="translate(28,150)"><rect width="214" height="56" rx="9" fill="#fff" stroke="#D9D7D0"/><circle cx="14" cy="17" r="2.6" fill="#D71920"/><text x="26" y="21" font-size="10.5" fill="#3A3A3A">Abrir Velara CRM</text><text x="26" y="37" font-size="10.5" fill="#3A3A3A">Ventas › Embudo</text></g>
+<g transform="translate(28,220)"><rect width="214" height="56" rx="9" fill="#fff" stroke="#D9D7D0"/><circle cx="14" cy="17" r="2.6" fill="#D71920"/><text x="26" y="21" font-size="10.5" fill="#3A3A3A">Responder los mensajes que</text><text x="26" y="37" font-size="10.5" fill="#3A3A3A">llegaron fuera de horario</text></g>
+<g transform="translate(28,290)"><rect width="214" height="70" rx="9" fill="#fff" stroke="#D9D7D0"/><circle cx="14" cy="17" r="2.6" fill="#D71920"/><text x="26" y="21" font-size="10.5" fill="#3A3A3A">Revisar cotizaciones sin</text><text x="26" y="37" font-size="10.5" fill="#3A3A3A">respuesta (24 h pendiente,</text><text x="26" y="53" font-size="10.5" fill="#3A3A3A">72 h urgente)</text></g>
+<g transform="translate(28,374)"><rect width="214" height="56" rx="9" fill="#fff" stroke="#D9D7D0"/><circle cx="14" cy="17" r="2.6" fill="#D71920"/><text x="26" y="21" font-size="10.5" fill="#3A3A3A">Revisar Trabajos: qué se</text><text x="26" y="37" font-size="10.5" fill="#3A3A3A">entrega hoy</text></g>
+
+<!-- 2 · entrada del cliente -->
+<path d="M471,190 L471,202" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M471,256 C471,264 430,264 430,272" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M502,312 L556,312" stroke="#A7A9AC" stroke-width="1.8" stroke-dasharray="1 5" marker-end="url(#arrowG)"/>
+<path d="M430,352 L430,366" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M430,410 L430,424" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M430,456 C430,470 372,470 372,484" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M430,456 C430,470 572,470 572,484" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="504" y="306" font-size="8.5" font-weight="700" fill="#5E6064">NO</text>
+<text x="438" y="363" font-size="8.5" font-weight="700" fill="#D71920">SÍ</text>
+<g transform="translate(282,150)"><rect width="378" height="40" rx="9" fill="#fff" stroke="#D9D7D0"/><text x="189" y="24" text-anchor="middle" font-size="10.5" fill="#3A3A3A">Saludar (/saludo) y preguntar qué necesita</text></g>
+<g transform="translate(282,202)"><rect width="378" height="54" rx="9" fill="#fff" stroke="#D9D7D0"/><text x="189" y="22" text-anchor="middle" font-size="10.5" fill="#3A3A3A">Identificar el servicio y generar confianza</text><text x="189" y="39" text-anchor="middle" font-size="9" fill="#5E6064">forros · tapizado · motos · carpas y toldos · forros de equipos</text></g>
+<g transform="translate(430,312)"><path d="M0,-40 L72,0 L0,40 L-72,0 Z" fill="#252525"/><text x="0" y="-3" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">¿LO HACEMOS</text><text x="0" y="12" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">EN EL TALLER?</text></g>
+<g transform="translate(556,286)"><rect width="116" height="52" rx="10" fill="#fff" stroke="#A7A9AC" stroke-dasharray="3 4"/><text x="58" y="19" text-anchor="middle" font-size="9" fill="#3A3A3A">Explicarlo y ofrecer</text><text x="58" y="32" text-anchor="middle" font-size="9" fill="#3A3A3A">lo que sí hacemos</text><text x="58" y="45" text-anchor="middle" font-size="8.5" fill="#5E6064">/nofabricamos</text></g>
+<g transform="translate(300,366)"><rect width="260" height="44" rx="9" fill="#fff" stroke="#D9D7D0"/><text x="130" y="19" text-anchor="middle" font-size="10" fill="#3A3A3A">Pedir datos, fotos y medidas</text><text x="130" y="33" text-anchor="middle" font-size="10" fill="#3A3A3A">según el servicio</text></g>
+<g transform="translate(316,424)"><rect width="228" height="32" rx="9" fill="#D71920"/><text x="114" y="20" text-anchor="middle" font-size="9.5" font-weight="700" letter-spacing="0.3" fill="#fff">REGISTRAR EN VELARA CRM HOY</text></g>
+<g transform="translate(284,484)"><rect width="176" height="104" rx="10" fill="#fff" stroke="#D9D7D0"/><use href="#ic-car" x="14" y="12" width="22" height="22" color="#D71920"/><text x="42" y="27" font-size="10" font-weight="700" fill="#252525">VEHÍCULOS Y MOTOS</text><text x="16" y="50" font-size="9" fill="#3A3A3A">Marca, modelo y año.</text><text x="16" y="63" font-size="9" fill="#3A3A3A">Fotos de cada silla y de</text><text x="16" y="76" font-size="9" fill="#3A3A3A">los daños, con luz de día</text><text x="16" y="92" font-size="8.5" fill="#5E6064">/forroscarro · /tapizado · /moto</text></g>
+<g transform="translate(484,484)"><rect width="176" height="104" rx="10" fill="#fff" stroke="#D9D7D0"/><use href="#ic-tent" x="14" y="12" width="22" height="22" color="#D71920"/><text x="42" y="27" font-size="10" font-weight="700" fill="#252525">CARPAS Y EQUIPOS</text><text x="16" y="50" font-size="9" fill="#3A3A3A">Carpas: visita de medición</text><text x="16" y="63" font-size="9" fill="#3A3A3A">sin costo. Equipos: medidas</text><text x="16" y="76" font-size="9" fill="#3A3A3A">L × A × H y fotos</text><text x="16" y="92" font-size="8.5" fill="#5E6064">/carpasvisita · /forrosequipo</text></g>
+
+<!-- 3 · cotización y seguimiento -->
+<path d="M903,136 C903,148 795,150 795,160" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M903,136 C903,148 1010,150 1010,160" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M795,188 L795,200" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M795,276 L795,290" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M1010,188 L1010,200" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M1010,258 L1010,272" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M1010,330 L1010,344" stroke="#D71920" stroke-width="2" marker-end="url(#arrow)"/>
+<g transform="translate(712,160)"><rect width="166" height="28" rx="14" fill="#F7D9DA" stroke="#D71920"/><text x="83" y="18" text-anchor="middle" font-size="9.5" font-weight="700" fill="#A8141A">COTIZAR · VELARA CRM</text></g>
+<g transform="translate(706,200)"><rect width="178" height="76" rx="9" fill="#fff" stroke="#D9D7D0"/><text x="14" y="24" font-size="9.3" fill="#3A3A3A">1 · Cotizaciones › Nueva</text><text x="14" y="42" font-size="9.3" fill="#3A3A3A">2 · Cliente y servicio</text><text x="14" y="60" font-size="9.3" fill="#3A3A3A">3 · Plantilla del servicio</text></g>
+<g transform="translate(706,290)"><rect width="178" height="76" rx="9" fill="#fff" stroke="#D9D7D0"/><text x="14" y="24" font-size="9.3" fill="#3A3A3A">4 · Guardar cotización</text><text x="14" y="42" font-size="9.3" fill="#3A3A3A">5 · Descargar el PDF</text><text x="14" y="60" font-size="9.3" fill="#3A3A3A">6 · Compartir por WhatsApp</text></g>
+<g transform="translate(908,160)"><rect width="204" height="28" rx="14" fill="#F7D9DA" stroke="#D71920"/><text x="102" y="18" text-anchor="middle" font-size="9.5" font-weight="700" fill="#A8141A">TIEMPOS DEL CLIENTE</text></g>
+<g transform="translate(912,200)"><rect width="196" height="58" rx="9" fill="#fff" stroke="#D9D7D0"/><use href="#ic-clock" x="12" y="18" width="20" height="20" color="#D71920"/><text x="40" y="24" font-size="9.3" font-weight="700" fill="#252525">Respuesta en 10 min</text><text x="12" y="45" font-size="9" fill="#3A3A3A">En horario, primer mensaje</text></g>
+<g transform="translate(912,272)"><rect width="196" height="58" rx="9" fill="#fff" stroke="#D9D7D0"/><use href="#ic-clock" x="12" y="18" width="20" height="20" color="#D71920"/><text x="40" y="24" font-size="9.3" font-weight="700" fill="#252525">Cotización en −24 h</text><text x="12" y="45" font-size="9" fill="#3A3A3A">Con los datos completos</text></g>
+<g transform="translate(912,344)"><rect width="196" height="72" rx="9" fill="#fff" stroke="#D9D7D0"/><use href="#ic-clock" x="12" y="18" width="20" height="20" color="#D71920"/><text x="40" y="24" font-size="9.3" font-weight="700" fill="#252525">Seguimiento 24 h · 72 h</text><text x="12" y="45" font-size="9" fill="#3A3A3A">/postcotiza · sin respuesta:</text><text x="12" y="59" font-size="9" fill="#3A3A3A">3 intentos en 7 días</text></g>
+<g transform="translate(706,384)"><rect width="402" height="62" rx="10" fill="#0B0B0B"/><text x="201" y="26" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="0.4" fill="#fff">MARCAR EL AVANCE EN EL CRM</text><text x="201" y="45" text-anchor="middle" font-size="9.5" fill="#CFCFD1">Nuevos → Contactados → Cotizados → Ganados / Perdidos</text></g>
+
+<!-- 4 · cierre y fin del día -->
+<g transform="translate(1140,150)"><rect width="194" height="520" rx="10" fill="#fff" stroke="#D9D7D0"/>
+  <text x="16" y="26" font-size="8.5" font-weight="700" letter-spacing="0.5" fill="#D71920">CUANDO EL CLIENTE ACEPTA</text>
+  <circle cx="16" cy="46" r="2.6" fill="#D71920"/><text x="28" y="50" font-size="9" fill="#3A3A3A">Anticipo del 50 % para</text><text x="28" y="62" font-size="9" fill="#3A3A3A">programar y comprar</text><text x="28" y="74" font-size="9" fill="#3A3A3A">material (/aprobada)</text>
+  <circle cx="16" cy="96" r="2.6" fill="#D71920"/><text x="28" y="100" font-size="9" fill="#3A3A3A">CRM: "El cliente aceptó ·</text><text x="28" y="112" font-size="9" fill="#3A3A3A">Crear trabajo"</text>
+  <circle cx="16" cy="134" r="2.6" fill="#D71920"/><text x="28" y="138" font-size="9" fill="#3A3A3A">Coordinar el ingreso del</text><text x="28" y="150" font-size="9" fill="#3A3A3A">vehículo o la visita</text><text x="28" y="162" font-size="9" fill="#3A3A3A">(/recepcion)</text>
+  <circle cx="16" cy="184" r="2.6" fill="#D71920"/><text x="28" y="188" font-size="9" fill="#3A3A3A">Trabajos: Por hacer →</text><text x="28" y="200" font-size="9" fill="#3A3A3A">En proceso → Listo →</text><text x="28" y="212" font-size="9" fill="#3A3A3A">Entregado</text>
+  <circle cx="16" cy="234" r="2.6" fill="#D71920"/><text x="28" y="238" font-size="9" fill="#3A3A3A">Entregar con fotos del</text><text x="28" y="250" font-size="9" fill="#3A3A3A">proceso y garantía escrita;</text><text x="28" y="262" font-size="9" fill="#3A3A3A">cobrar el saldo</text>
+  <circle cx="16" cy="284" r="2.6" fill="#D71920"/><text x="28" y="288" font-size="9" fill="#3A3A3A">Pedir reseña en Google</text><text x="28" y="300" font-size="9" fill="#3A3A3A">(/resena)</text>
+  <line x1="14" y1="322" x2="180" y2="322" stroke="#E4E1D9"/>
+  <text x="16" y="344" font-size="8.5" font-weight="700" letter-spacing="0.5" fill="#D71920">FIN DEL DÍA</text>
+  <circle cx="16" cy="364" r="2.6" fill="#D71920"/><text x="28" y="368" font-size="9" fill="#3A3A3A">Contar los mensajes del</text><text x="28" y="380" font-size="9" fill="#3A3A3A">día por canal: WhatsApp,</text><text x="28" y="392" font-size="9" fill="#3A3A3A">llamada, correo</text>
+  <circle cx="16" cy="414" r="2.6" fill="#D71920"/><text x="28" y="418" font-size="9" fill="#3A3A3A">Reportes › Informe diario</text><text x="28" y="430" font-size="9" fill="#3A3A3A">→ Copiar informe</text>
+  <circle cx="16" cy="452" r="2.6" fill="#D71920"/><text x="28" y="456" font-size="9" fill="#3A3A3A">Dejar anotados los</text><text x="28" y="468" font-size="9" fill="#3A3A3A">pendientes de mañana</text>
+  <line x1="14" y1="486" x2="180" y2="486" stroke="#E4E1D9"/>
+  <text x="16" y="504" font-size="8.5" font-weight="700" fill="#252525">ENTREGABLE: informe diario</text>
+</g>
+</svg></div>
+    <p class="flow-hint">Los cuatro momentos del día, de izquierda a derecha.<span> · Deslice para verlos todos →</span></p>
+    <div class="flow-legend">
+      <span><i class="dot" style="background:#D71920"></i>Paso del proceso</span>
+      <span><i class="dot" style="background:#252525"></i>Punto de decisión</span>
+      <span><i class="dot" style="background:#A7A9AC"></i>Rama alterna</span>
+      <span><i class="dot" style="background:#F7D9DA;border:1px solid #D71920"></i>Herramienta (Velara CRM)</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESPUESTAS RÁPIDAS ============ -->
+<section id="view-respuestas" class="view">
+  <div class="section-wrap">
+    <div class="section-head">
+      <div class="section-head-row">
+        <div>
+          <span class="eyebrow">Biblioteca de mensajes</span>
+          <h1>Respuestas rápidas</h1>
+          <p>Busque por comando, servicio o palabra. Copie el mensaje o edítelo con «Editar». Los cambios se guardan en este navegador. Lo resaltado en amarillo se cambia antes de enviar.</p>
+        </div>
+        <button class="rr-add-fab" id="rr-add-toggle" type="button" title="Agregar respuesta" aria-label="Agregar respuesta">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="search-box">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>
+      <input type="text" id="rr-search" placeholder="Buscar: /moto, garantía, visita, precio…">
+    </div>
+    <div class="rr-add-form" id="rr-add-form" hidden>
+      <div class="rr-add-grid">
+        <label>Categoría <select id="rr-add-cat"></select><input type="text" id="rr-add-cat-new" placeholder="Nombre de la nueva categoría" hidden></label>
+        <label>Tono <select id="rr-add-tone"></select><input type="text" id="rr-add-tone-new" placeholder="Directo, cordial, formal…" hidden></label>
+        <label>Comando (opcional) <input type="text" id="rr-add-cmd" placeholder="/comando"></label>
+        <label>Título <input type="text" id="rr-add-label" placeholder="Título breve"></label>
+      </div>
+      <label>Mensaje <textarea id="rr-add-msg" rows="5" placeholder="Escriba el mensaje…"></textarea></label>
+      <div class="rr-add-actions">
+        <span class="rr-add-error" id="rr-add-error"></span>
+        <button type="button" class="btn ghost" id="rr-add-cancel">Cancelar</button>
+        <button type="button" class="btn primary" id="rr-add-save">Guardar respuesta</button>
+      </div>
+    </div>
+    <p class="rr-empty" id="rr-empty">No hay resultados. Pruebe con otra palabra.</p>
+    <div id="rr-list"></div>
+  </div>
+</section>
+
+<!-- ============ INFORMACIÓN BÁSICA ============ -->
+<section id="view-info" class="view">
+  <div class="section-wrap">
+    <div class="section-head">
+      <span class="eyebrow">Ficha de consulta</span>
+      <h1>Información básica</h1>
+      <p>Datos de la empresa, servicios, tiempos, garantías y condiciones para consultar mientras atiende. Es material de consulta, no mensajes para enviar. Son los mismos datos de la página web y de las cotizaciones del CRM.</p>
+    </div>
+    <div class="search-box">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>
+      <input type="text" id="ib-search" placeholder="Buscar: garantía, tiempos, motos, anticipo…">
+    </div>
+    <p class="rr-empty" id="ib-empty">No hay resultados. Pruebe con otra palabra.</p>
+    <div id="ib-list"></div>
+  </div>
+</section>
+
+<!-- ============ VELARA CRM ============ -->
+<section id="view-crm" class="view">
+  <div class="section-wrap">
+    <div class="section-head">
+      <span class="eyebrow">Herramienta de trabajo</span>
+      <h1>Velara CRM</h1>
+      <p>Todo cliente queda en Velara CRM, aunque no compre. Un cliente que no está en el CRM no existe para el informe, el seguimiento ni los indicadores.</p>
+    </div>
+
+    <div class="block">
+      <h2>Del primer mensaje a la entrega</h2>
+      <div class="steps">
+        <div class="step-row"><div class="step-num">1</div><div><h3>Registrar al cliente</h3><span class="path">Cotizaciones › Nueva cotización</span><p>Busque si ya existe por nombre, teléfono o documento. Si no aparece, llene nombre y teléfono (obligatorios), documento, correo, dirección y ciudad. El cliente queda creado al guardar. También puede pegar el bloque de datos que mandó el cliente: el CRM reparte cada dato en su campo.</p></div></div>
+        <div class="step-row"><div class="step-num">2</div><div><h3>Elegir el servicio</h3><p>Forros para carros, tapizado automotriz, tapizado de motos, carpas y toldos, o forros para equipos. Cada servicio pide sus datos: marca, modelo y año para vehículos; tipo y medidas para carpas.</p></div></div>
+        <div class="step-row"><div class="step-num">3</div><div><h3>Calcular con una plantilla</h3><p>En el paso 3 use el botón de la plantilla del servicio: <b>Forros para carro</b>, <b>Tapizado automotriz</b>, <b>Sillín de moto</b>, <b>Carpa de fachada</b>, <b>Forro a medida</b>, <b>Catálogo de forros</b> o <b>Costeo especial</b>. La plantilla sugiere el precio y escribe la descripción; puede ajustarlos antes de guardar.</p></div></div>
+        <div class="step-row"><div class="step-num">4</div><div><h3>Guardar y enviar</h3><p><b>Guardar cotización</b> le asigna el número (COT-0001…). Luego <b>Descargar PDF</b> y <b>Compartir por WhatsApp</b>: abre el chat del cliente con el mensaje escrito; adjunte el PDF. Marque <b>Marcar como enviada</b>.</p></div></div>
+        <div class="step-row"><div class="step-num">5</div><div><h3>Hacer seguimiento</h3><span class="path">Ventas › Embudo</span><p>Mueva al cliente de etapa cuando pase algo real: lo contactó, le cotizó, compró o desistió. Las cotizaciones sin respuesta aparecen como pendientes a las 24 horas y urgentes a las 72 horas.</p></div></div>
+        <div class="step-row"><div class="step-num">6</div><div><h3>Cuando el cliente acepta</h3><p>En la cotización, <b>El cliente aceptó · Crear trabajo</b>: marca la venta como ganada y pasa el trabajo al tablero del taller (<span class="path">Trabajos › Tablero</span>).</p></div></div>
+        <div class="step-row"><div class="step-num">7</div><div><h3>Cerrar el día</h3><span class="path">Reportes › Informe diario</span><p>Escriba cuántos mensajes llegaron por WhatsApp, correo y llamada; lo demás lo calcula el CRM. <b>Copiar informe</b> lo deja listo para enviar por WhatsApp.</p></div></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <h2>Etapas del cliente (embudo de ventas)</h2>
+      <div class="pipeline">
+        <span class="chip pos">Nuevo</span><span class="chip-arrow">→</span>
+        <span class="chip pos">Contactado</span><span class="chip-arrow">→</span>
+        <span class="chip pos">Cotizado</span><span class="chip-arrow">→</span>
+        <span class="chip pos">Ganado</span>
+        <span class="chip neutral">Perdido</span>
+      </div>
+    </div>
+
+    <div class="block">
+      <h2>Etapas del trabajo en el taller</h2>
+      <div class="pipeline">
+        <span class="chip dark">Por hacer</span><span class="chip-arrow">→</span>
+        <span class="chip dark">En proceso</span><span class="chip-arrow">→</span>
+        <span class="chip dark">Listo</span><span class="chip-arrow">→</span>
+        <span class="chip dark">Entregado</span>
+      </div>
+    </div>
+
+    <div class="block">
+      <h2>Reglas que no se negocian</h2>
+      <div class="rule-box">
+        <p><b>Todo cliente queda en el CRM</b> el mismo día, compre o no compre.</p>
+        <p><b>Nada de precios al aire.</b> Un precio sin fotos ni medidas se vuelve un compromiso. Con fotos y medidas se da un valor aproximado, y se aclara que el precio en firme se confirma con la pieza a la vista.</p>
+        <p><b>Tiempos y garantías</b> se dicen tal como están en «Información básica»: son los mismos de la página web y de la cotización.</p>
+        <p><b>Si el cliente no responde</b>, tres intentos en siete días y se marca como perdido con el motivo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="foot">VELARA · Manual de atención al cliente. Los datos de contacto, tiempos y garantías se actualizan junto con la página web y Velara CRM.</p>
+
+<script>
+/* ---------- pestañas ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('view-'+t.dataset.view).classList.add('active');
+  window.scrollTo({top:0,behavior:'instant'});
+}));
+
+/* ---------- datos de la empresa (iguales al sitio y al CRM) ---------- */
+const EMPRESA = {
+  nombre: 'VELARA',
+  whatsapp: '300 366 6093',
+  correo: 'velarataller@gmail.com',
+  direccion: 'Calle 56 # 12C-02, Local 3, Barranquilla, Atlántico',
+  horario: 'lunes a viernes de 8:00 a. m. a 6:00 p. m. y sábados de 8:00 a. m. a 1:00 p. m.',
+  mapa: 'https://maps.google.com/?q=Calle+56+%2312C-02+Local+3,+Barranquilla'
+};
+
+/* ---------- quién atiende ---------- */
+function lsGet(k, fb){ try{ const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; }catch(e){ return fb; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+const whoInput = document.getElementById('who');
+whoInput.value = lsGet('velaraManualNombre', '');
+whoInput.addEventListener('input', () => { lsSet('velaraManualNombre', whoInput.value.trim()); rerenderRR(); });
+function fill(text){
+  const name = whoInput.value.trim();
+  return text.replace(/\{NOMBRE\}/g, name || '[SU NOMBRE]');
+}
+</script>
+
+<script>
+/* =====================================================================
+   RESPUESTAS RÁPIDAS — VELARA
+   Trato de usted, frases cortas, sin superlativos (ver manual de marca).
+   {NOMBRE} se reemplaza por quien atiende; [ENTRE CORCHETES] se cambia a mano.
+   ===================================================================== */
+const RESPUESTAS = [
+ {cat:'Saludo', items:[
+  {c:'/saludo', l:'Saludo con servicios', t:'Cordial', m:`Hola, gracias por escribir a VELARA. Le saluda {NOMBRE}.
+
+¿En qué le podemos ayudar?
+
+• Forros para carros
+• Tapizado automotriz
+• Tapizado de sillines de moto
+• Carpas y toldos para negocio
+• Forros de protección para equipos`},
+  {c:'/saludo2', l:'Saludo pidiendo el nombre', t:'Cordial', m:`Hola, bienvenido a VELARA, taller de tapicería en Barranquilla. Le saluda {NOMBRE}.
+
+¿Con quién tengo el gusto?`},
+  {c:'/saludo3', l:'Respuesta con demora', t:'Cordial', m:`Hola, buen día. Le saluda {NOMBRE}, de VELARA.
+
+Gracias por su mensaje y disculpe la demora.
+
+Cuénteme qué necesita y para qué vehículo, moto o espacio, y le ayudo de inmediato.`},
+  {c:'/saludoref', l:'Cliente que vuelve o referido', t:'Cercano', m:`Hola, qué gusto saludarlo de nuevo. Le habla {NOMBRE}, de VELARA.
+
+Gracias por volver a contar con nosotros.
+
+¿Es sobre el mismo trabajo que hicimos o se trata de algo nuevo?`},
+  {c:'/saludoempresa', l:'Saludo a empresa o flota', t:'Formal', m:`Buen día. Le saluda {NOMBRE}, del área comercial de VELARA.
+
+Gracias por contactarnos. ¿Me confirma su nombre, el de la empresa y el trabajo que necesita? Atendemos flotas, talleres y concesionarios con tiempos y precios por volumen.`}
+ ]},
+ {cat:'Identificar el servicio', items:[
+  {c:'/servicios', l:'Menú de servicios', t:'Cordial', m:`Con gusto. ¿Cuál de estos trabajos necesita?
+
+• Forros para carros, a la medida de su vehículo
+• Tapizado automotriz: sillas, paneles, techo, timón
+• Tapizado de sillines de moto
+• Carpas y toldos para negocio
+• Forros de protección para equipos médicos, de sonido o maquinaria`},
+  {c:'/consulta', l:'Preguntas para calificar', t:'Directo', m:`Para darle una respuesta precisa necesito saber:
+
+• Qué trabajo necesita
+• Para qué vehículo, moto o espacio (marca, modelo y año si es vehículo)
+• En qué ciudad o barrio se encuentra
+• Para cuándo lo necesita`}
+ ]},
+ {cat:'Forros para carros', items:[
+  {c:'/forroscarro', l:'Presentación', t:'Cordial', m:`Con gusto. Hacemos forros a la medida de su carro: levantamos el patrón sobre sus asientos, no usamos tallas genéricas. Así no hacen bolsas, no se corren y no tapan controles, cinturón ni airbag.
+
+Se entregan e instalan el mismo día de la entrega, sin herramientas. El tiempo típico es de 1 a 3 días hábiles.
+
+¿Me confirma marca, modelo y año del carro?`},
+  {c:'/forroscarro2', l:'Datos para cotizar forros', t:'Directo', m:`Para cotizarle los forros necesito:
+
+• Marca, modelo y año
+• Qué quiere forrar: juego completo, solo delanteros o solo banca trasera
+• Material que prefiere: cuerina técnica, tela deportiva, neopreno o cuero
+• Color
+• Una foto de las sillas delanteras y otra de la banca trasera`},
+  {c:'/forrosmaterial', l:'Opciones de material', t:'Consultivo', m:`Le cuento las opciones de material:
+
+• Cuerina técnica: fácil de limpiar, la más pedida para uso diario
+• Tela deportiva: fresca, buena para el calor de Barranquilla
+• Neopreno: resistente al agua, ideal si se moja o lleva mascotas
+• Cuero: el acabado más elegante y el que más dura con buen cuidado
+
+¿Cuál se ajusta más a su uso?`},
+  {c:'/forrostaxi', l:'Flotas y taxis', t:'Formal', m:`Para flotas y taxis hacemos un forro pensado para servicio público: resistente al uso de todo el día, fácil de limpiar y rápido de reponer por unidad.
+
+¿Cuántos vehículos son, y de qué marca y modelo?`}
+ ]},
+ {cat:'Tapizado automotriz', items:[
+  {c:'/tapizado', l:'Presentación', t:'Cordial', m:`Con gusto. En tapizado automotriz rehacemos sillas, paneles, techos, timones y consolas trazando cada pieza sobre su vehículo, igualando costura y acabado al diseño de fábrica.
+
+El tiempo típico es de 1 a 3 semanas según el alcance.
+
+¿Qué parte del interior quiere renovar y cuál es el vehículo?`},
+  {c:'/tapizadofotos', l:'Fotos que necesitamos', t:'Directo', m:`Para darle un valor sin tener el vehículo en el taller, envíeme por favor:
+
+• El interior completo desde las dos puertas delanteras, con luz de día
+• Cada silla de frente y de perfil
+• Primeros planos de los daños: descosidos, huecos, espuma hundida, techo despegado
+• La placa o la ficha técnica para identificar el modelo
+
+El precio en firme se confirma con el vehículo en el taller.`},
+  {c:'/techo', l:'Techo o cielo despegado', t:'Técnico', m:`Es muy común en Barranquilla: el calor despega el cielo de fábrica.
+
+Lo rehacemos en material tratado, tensado sobre la estructura original, sin arrugas ni caídas.
+
+¿Me envía una foto del techo y me confirma marca, modelo y año?`},
+  {c:'/flotas', l:'Flotas y vehículos de trabajo', t:'Formal', m:`Para flotas hacemos un patrón maestro sobre el primer vehículo, lo probamos en servicio y luego producimos por lotes para no parar su operación.
+
+¿Cuántos vehículos son, de qué tipo y qué parte del interior necesita?`}
+ ]},
+ {cat:'Sillines de moto', items:[
+  {c:'/moto', l:'Presentación', t:'Cordial', m:`Con gusto. Reconstruimos el sillín desde la base: espuma en dos densidades, forma corregida para repartir el peso y forro tratado contra el sol, con costura sellada para que no entre agua.
+
+Atendemos todas las marcas; las que más trabajamos son AKT, Bajaj, Yamaha, Honda y Suzuki. El tiempo típico es de 3 a 7 días.
+
+¿Qué moto tiene (marca y modelo)?`},
+  {c:'/moto2', l:'Datos para cotizar sillín', t:'Directo', m:`Para cotizarle necesito:
+
+• Marca y modelo de la moto
+• Tipo: sillín individual, biplaza o baúl
+• Qué le pasa: roto, duro, hundido o solo quiere cambiar el material
+• Una foto del sillín de lado y de arriba`},
+  {c:'/motoreparto', l:'Moto de trabajo o reparto', t:'Cercano', m:`Para quien trabaja en la moto le hacemos un sillín de jornada larga: más cómodo, en material fácil de limpiar y con costura que no se abre con el uso diario.
+
+¿Qué moto es y cuántas horas al día la usa?`},
+  {c:'/motoclasica', l:'Moto clásica', t:'Consultivo', m:`También restauramos sillines de motos de época con el perfil original, tachuelas incluidas, sobre una base nueva para que la pieza vuelva a montarse.
+
+¿Me envía fotos del sillín y me cuenta qué moto es?`}
+ ]},
+ {cat:'Carpas y toldos', items:[
+  {c:'/carpas', l:'Presentación', t:'Cordial', m:`Con gusto. Hacemos carpas, toldos y cubiertas a la medida de su local: medimos en sitio, confeccionamos con costura doble sellada y cinchas de refuerzo, y montamos.
+
+Trabajamos toldos de fachada (fijos o recogibles), carpas para terraza, cubiertas y lonas, y cerramientos.
+
+¿Qué espacio quiere cubrir y en qué barrio o municipio está?`},
+  {c:'/carpasvisita', l:'Visita de medición', t:'Directo', m:`Para carpas y toldos no cotizamos con medidas por foto: la visita de medición es sin costo dentro del área metropolitana y evita errores.
+
+Para agendarla necesito:
+• Dirección exacta
+• Persona de contacto en el sitio
+• Días y horas en que podemos ir`},
+  {c:'/carpasfachada', l:'Toldo de fachada', t:'Técnico', m:`Para toldos de fachada:
+
+• Fijo o recogible (enrollable)
+• Lona de PVC o lona textil tipo tela
+• Se hace con las medidas exactas de la fachada, por encima del letrero
+• Recomendamos una inclinación para que el agua corra y no se empoce
+
+¿Me indica el ancho de la fachada y cuánto quiere que sobresalga?`},
+  {c:'/carpasmant', l:'Mantenimiento de carpas', t:'Cordial', m:`También revisamos carpas ya instaladas: retensado, cambio de cinchas, sellado de costuras y limpieza sin dañar el tratamiento de la lona.
+
+¿Me envía una foto de la carpa y me cuenta qué le está pasando?`}
+ ]},
+ {cat:'Forros para equipos', items:[
+  {c:'/forrosequipo', l:'Presentación', t:'Cordial', m:`Con gusto. Hacemos forros de protección a la medida para equipos médicos, de sonido y maquinaria: lavables para consultorios, acolchados para transporte o impermeables para exteriores.
+
+Para cotizarle necesito:
+• Qué equipo es
+• Medidas: largo × ancho × alto
+• Cantidad
+• Para qué lo necesita: polvo, transporte o intemperie
+• Una foto del equipo`},
+  {c:'/forrossonido', l:'Equipos de sonido', t:'Directo', m:`Hacemos forros y estuches para cabinas, consolas, amplificadores y luces, que protegen del polvo, los golpes del transporte y la lluvia en eventos.
+
+¿Me confirma la referencia del equipo, la cantidad y si quiere el logo bordado o impreso?`},
+  {c:'/forrostecnico', l:'Pregunta técnica sin respuesta segura', t:'Honesto', m:`Gracias por la pregunta.
+
+Para darle un dato técnico exacto prefiero confirmarlo en el taller antes que darle una cifra aproximada. Se lo respondo junto con la cotización.
+
+¿Me confirma su nombre, ciudad y un correo de contacto?`}
+ ]},
+ {cat:'Datos y cotización', items:[
+  {c:'/datos', l:'Datos para la cotización', t:'Directo', m:`Para preparar su cotización necesito:
+
+• Nombre o razón social
+• Cédula o NIT
+• Dirección y ciudad
+• Teléfono
+• Correo`},
+  {c:'/datosempresa', l:'Datos de facturación de empresa', t:'Formal', m:`Para emitir la cotización a nombre de la empresa necesito:
+
+• Razón social, tal como aparece en el RUT
+• NIT
+• Dirección y ciudad
+• Persona de contacto y teléfono
+• Correo para enviar la cotización`},
+  {c:'/registro', l:'Solicitud registrada', t:'Cordial', m:`Gracias, ya quedó registrada su solicitud.
+
+Le envío la cotización por este medio en menos de 24 horas. Si le surge cualquier duda mientras tanto, escríbame.`},
+  {c:'/envio', l:'Envío de la cotización', t:'Cordial', m:`Le comparto la cotización [NÚMERO] por [VALOR].
+
+Incluye el detalle del trabajo, el tiempo de entrega y la garantía. ¿La revisa y me cuenta si tiene alguna duda o quiere ajustar algo?`}
+ ]},
+ {cat:'Seguimiento', items:[
+  {c:'/postcotiza', l:'Seguimiento breve', t:'Breve', m:`Hola, ¿pudo revisar la cotización que le envié?
+
+¿Tiene alguna duda o quiere que ajustemos algo?`},
+  {c:'/postcotiza2', l:'Seguimiento con ajustes', t:'Cordial', m:`Buen día, espero que esté muy bien.
+
+Quería confirmar si recibió la cotización y si quedó clara. Si necesita cambiar el material, el alcance o revisar otra opción, con gusto la ajustamos.`},
+  {c:'/postcotiza3', l:'Seguimiento consultivo', t:'Consultivo', m:`Buen día. Le escribe {NOMBRE}, de VELARA.
+
+Han pasado unos días desde la cotización y quería saber cómo va su decisión. ¿Hay algún punto que quiera revisar antes de decidir?`},
+  {c:'/nocontesta', l:'Sin respuesta · intento 1', t:'Cordial', m:`Hola, buen día.
+
+¿Sigue interesado en el trabajo que cotizamos? Quedo atento para continuar cuando usted quiera.`},
+  {c:'/nocontesta2', l:'Sin respuesta · intento 2', t:'Respetuoso', m:`Buen día. Le escribe de nuevo {NOMBRE}, de VELARA.
+
+¿Su proyecto sigue en pie o prefiere que lo retomemos más adelante? Si ahora no es prioridad, no hay problema: solo indíquemelo.`},
+  {c:'/nocontesta3', l:'Sin respuesta · intento 3 (cierre)', t:'Cordial', m:`Buen día, espero que esté muy bien.
+
+Como no he tenido respuesta, cierro por ahora su solicitud para no seguir ocupando su tiempo. Sus datos quedan guardados: cuando quiera retomarlo, escríbame por aquí y seguimos donde quedamos.
+
+Gracias por pensar en VELARA.`},
+  {c:'/reactivacion', l:'Reactivar cliente antiguo', t:'Cordial', m:`Hola, buen día. Le saluda {NOMBRE}, de VELARA.
+
+Hace un tiempo hablamos sobre [TRABAJO] y quería saber si todavía lo tiene en mente. Con gusto actualizamos la cotización cuando le quede bien.`}
+ ]},
+ {cat:'Cierre y entrega', items:[
+  {c:'/aprobada', l:'Cliente acepta: anticipo', t:'Directo', m:`Perfecto, gracias por confiar en VELARA.
+
+Para programar el trabajo y comprar el material se paga el 50 % de anticipo; el otro 50 % se paga contra entrega.
+
+Datos de pago: [DATOS DE PAGO]
+
+Cuando haga la transferencia, envíeme el comprobante y le confirmo la fecha.`},
+  {c:'/recepcion', l:'Coordinar ingreso al taller', t:'Cordial', m:`Ya tenemos todo listo para empezar.
+
+¿Qué día y a qué hora puede traer [EL VEHÍCULO / LA MOTO / LA PIEZA] al taller?
+
+Estamos en ${EMPRESA.direccion}, ${EMPRESA.horario}.`},
+  {c:'/listo', l:'Trabajo listo para entregar', t:'Cordial', m:`Buenas noticias: su trabajo ya está listo.
+
+Puede pasar a recogerlo ${EMPRESA.horario}. Le entregamos las fotos del proceso y la garantía por escrito. El saldo pendiente es de [VALOR].`},
+  {c:'/resena', l:'Pedir reseña', t:'Cercano', m:`Gracias por confiar en VELARA. Esperamos que disfrute su [TRABAJO].
+
+Si quedó contento, nos ayudaría mucho una reseña en Google: [ENLACE DE RESEÑAS]
+
+Y si algo no quedó como esperaba, escríbanos primero a nosotros para resolverlo.`}
+ ]},
+ {cat:'Casos especiales', items:[
+  {c:'/nofabricamos', l:'Trabajo que no hacemos', t:'Cordial', m:`Gracias por pensar en VELARA.
+
+Ese trabajo en particular no lo hacemos en el taller. Nuestra especialidad es la tapicería y la confección a medida: forros para carros, tapizado automotriz y de motos, carpas y toldos, y forros para equipos.
+
+Si necesita alguno de estos, con gusto le ayudo.`},
+  {c:'/precio', l:'Cliente pide precio de inmediato', t:'Cordial', m:`Entiendo que quiera tener un valor de una vez.
+
+Como todo se hace a la medida, el precio depende del vehículo o la pieza, el material y el estado. Con fotos y medidas le doy un valor aproximado, y el precio en firme se confirma con la pieza a la vista.
+
+¿Me envía las fotos y me confirma el modelo?`},
+  {c:'/precio2', l:'Cliente insiste en un precio', t:'Firme', m:`Le entiendo. Prefiero no darle una cifra que después no se ajuste a su trabajo: eso le haría perder tiempo a usted.
+
+Con las fotos y los datos le envío la cotización formal en menos de 24 horas. ¿Avanzamos así?`},
+  {c:'/garantia', l:'Garantía', t:'Formal', m:`Todo trabajo de VELARA se entrega con garantía escrita:
+
+• Tapizado automotriz y de motos: 12 meses en costura y material
+• Carpas y toldos: 24 meses en costura y confección; la lona según la garantía del fabricante
+• Forros: 6 meses en costura y cremalleras
+
+Cubre defectos de confección. No cubre el desgaste normal, el mal uso, accidentes, mascotas ni productos de limpieza inadecuados.`},
+  {c:'/garantia2', l:'Cómo hacer efectiva la garantía', t:'Directo', m:`Lamento el inconveniente. Para revisarlo, envíeme por favor:
+
+• El número de orden (está en el documento de entrega)
+• Una foto del problema
+
+Lo revisamos y, si aplica, coordinamos la reparación en un plazo de 5 días hábiles, sin costo, incluido el traslado dentro de Barranquilla.`},
+  {c:'/tiempos', l:'Tiempos de entrega', t:'Cordial', m:`Los tiempos típicos son:
+
+• Forros para carros: 1 a 3 días hábiles
+• Sillín de moto: 3 a 7 días
+• Tapizado automotriz: 1 a 3 semanas, según el alcance
+• Forros para equipos: 3 días a 2 semanas
+• Carpas y toldos: 2 a 4 semanas
+
+La fecha en firme va en la cotización y la cumplimos.`},
+  {c:'/pagos', l:'Cómo se paga', t:'Directo', m:`Cobramos por trabajo, no por hora. La cotización incluye material, mano de obra y montaje.
+
+Se paga 50 % para empezar y 50 % contra entrega, por transferencia, tarjeta o efectivo. Si al desarmar aparece algo no previsto, se lo consultamos antes de seguir.`},
+  {c:'/horario', l:'Mensaje fuera de horario', t:'Cordial', m:`Hola, gracias por escribir a VELARA.
+
+En este momento estamos fuera de horario (${EMPRESA.horario}). Su mensaje quedó recibido y lo respondemos apenas abramos.
+
+Si quiere adelantar, déjenos el trabajo que necesita, el vehículo o la pieza y unas fotos.`},
+  {c:'/ubicacion', l:'Dirección del taller', t:'Informativo', m:`Con gusto. Estamos en:
+
+${EMPRESA.direccion}
+Horario: ${EMPRESA.horario}
+Mapa: ${EMPRESA.mapa}`},
+  {c:'/cobertura', l:'Recogida y cobertura', t:'Transparente', m:`Para trabajos grandes coordinamos la recogida y la entrega dentro de Barranquilla. Los sillines y las piezas sueltas se reciben en el taller.
+
+Para carpas y toldos, la visita de medición es sin costo en el área metropolitana. Para otras ciudades, consúltenos y lo evaluamos.`},
+  {c:'/materialpropio', l:'Cliente trae su material', t:'Honesto', m:`Sí, puede traer su material. Antes de cortar revisamos que sirva para el uso que le va a dar.
+
+Si no aguanta, se lo decimos: preferimos perder la venta del material que tener que rehacer el trabajo.`},
+  {c:'/talleres', l:'Otros talleres y concesionarios', t:'Formal', m:`Sí, damos servicio de confección y tapizado a talleres de motos, latonería y concesionarios, con tiempos y precios de mayorista.
+
+¿Me cuenta qué tipo de trabajo necesitan y con qué frecuencia?`},
+  {c:'/mismodia', l:'¿Lo hacen el mismo día?', t:'Directo', m:`Los arreglos puntuales sí (un descosido, un parche, una cremallera). Un trabajo completo necesita desarmar, patronar, coser y montar, y eso no se hace bien en una tarde.
+
+Los forros para carros sí se instalan el mismo día de la entrega.`},
+  {c:'/cuidado', l:'Cuidado del cuero y la lona', t:'Informativo', m:`Para que dure más:
+
+• Limpie con un paño de microfibra apenas húmedo y jabón neutro
+• Hidrate el cuero cada 4 a 6 meses con crema para tapicería
+• No use aceite de bebé, vaselina, siliconas ni solventes
+• Evite el sol directo por horas; use parasol en el carro`},
+  {c:'/gracias', l:'Cierre de conversación', t:'Cordial', m:`Gracias a usted por escribirnos.
+
+Quedo atento a lo que necesite. Ha sido un gusto atenderle.
+
+VELARA · Soluciones a medida.`}
+ ]}
+];
+
+/* ---- lógica: copiar, editar, agregar (se guarda en este navegador) ---- */
+const RR_CUSTOM = 'velaraRRCustom', RR_OVER = 'velaraRROverrides', RR_DEL = 'velaraRRDeleted';
+RESPUESTAS.forEach((g, gi) => g.items.forEach((it, ii) => { it.id = 'b' + gi + '-' + it.c; it._base = true; }));
+const loadCustom = () => { const a = lsGet(RR_CUSTOM, []); return Array.isArray(a) ? a : []; };
+const loadOver = () => { const o = lsGet(RR_OVER, {}); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; };
+const loadDel = () => { const a = lsGet(RR_DEL, []); return Array.isArray(a) ? a : []; };
+
+function mergeCustom(item){
+  let g = RESPUESTAS.find(x => x.cat.toLowerCase() === item.cat.toLowerCase());
+  if(!g){ g = {cat:item.cat, items:[]}; RESPUESTAS.push(g); }
+  g.items.push({c:item.c, l:item.l, t:item.t, m:item.m, id:item.id, cat:item.cat, _base:false});
+}
+loadCustom().forEach(mergeCustom);
+
+function effectiveGroups(){
+  const ov = loadOver(), del = new Set(loadDel()), order = [], byCat = new Map();
+  const ensure = (cat) => { let g = byCat.get(cat); if(!g){ g = {cat, items:[]}; byCat.set(cat, g); order.push(g); } return g; };
+  RESPUESTAS.forEach(gr => {
+    ensure(gr.cat);
+    gr.items.forEach(it => {
+      if(del.has(it.id)) return;
+      const o = ov[it.id] || null;
+      ensure(o && o.cat ? o.cat : (it.cat || gr.cat)).items.push({
+        id: it.id, _base: it._base !== false, _edited: !!o,
+        c: o && o.c != null ? o.c : it.c, l: o && o.l != null ? o.l : it.l,
+        t: o && o.t != null ? o.t : it.t, m: o && o.m != null ? o.m : it.m
+      });
+    });
+  });
+  return order.filter(g => g.items.length);
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function highlight(text){ return esc(text).replace(/\[[^\]\n]+\]/g, m => '<span class="ph">' + m + '</span>'); }
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try{ document.execCommand('copy'); resolve(); }catch(e){ reject(e); } finally{ document.body.removeChild(ta); }
+  });
+}
+const CHEV = '<svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+const ICON_COPY = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+
+function renderRespuestas(filter, opts){
+  opts = opts || {};
+  const keep = new Set(opts.keepOpen || []);
+  const list = document.getElementById('rr-list'), empty = document.getElementById('rr-empty');
+  const q = (filter || '').trim().toLowerCase();
+  list.innerHTML = '';
+  let shown = 0;
+  effectiveGroups().forEach(g => {
+    const items = g.items.filter(it => !q || [it.c, it.l, it.m, g.cat].some(s => s.toLowerCase().includes(q)));
+    if(!items.length) return;
+    shown += items.length;
+    const div = document.createElement('div');
+    div.className = 'cat' + ((q || keep.has(g.cat)) ? ' open' : '');
+    div.dataset.cat = g.cat;
+    div.innerHTML = `<button class="cat-head"><span class="cat-title"><span class="n">${esc(g.cat)}</span><span class="cat-count">${items.length}</span></span>${CHEV}</button><div class="cat-body rr-body"></div>`;
+    const body = div.querySelector('.rr-body');
+    items.forEach(it => body.appendChild(buildCard(it, g.cat)));
+    div.querySelector('.cat-head').addEventListener('click', () => div.classList.toggle('open'));
+    list.appendChild(div);
+  });
+  const hidden = loadDel().length;
+  if(hidden){
+    const note = document.createElement('div');
+    note.className = 'rr-hidden-note';
+    note.textContent = hidden + (hidden === 1 ? ' respuesta original oculta. ' : ' respuestas originales ocultas. ');
+    const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'btn ghost small'; rb.textContent = 'Restaurar todas';
+    rb.addEventListener('click', () => { lsSet(RR_DEL, []); rerenderRR(); });
+    note.appendChild(rb); list.appendChild(note);
+  }
+  empty.style.display = shown ? 'none' : 'block';
+  if(opts.scrollY != null) window.scrollTo(0, opts.scrollY);
+}
+function rerenderRR(){
+  const open = [...document.querySelectorAll('#rr-list .cat.open')].map(d => d.dataset.cat);
+  renderRespuestas(document.getElementById('rr-search').value, {keepOpen: open, scrollY: window.scrollY});
+}
+
+function buildCard(it, catName){
+  const card = document.createElement('div');
+  card.className = 'rr-card';
+  card.innerHTML = `
+    <div class="rr-card-top"><span class="rr-cmd mono"></span><span class="rr-tone"></span></div>
+    <span class="rr-label"></span>
+    <p class="rr-text"></p>
+    <div class="rr-actions">
+      <button class="rr-copy" type="button">${ICON_COPY} Copiar</button>
+      <button class="rr-edit" type="button">Editar</button>
+    </div>
+    <div class="rr-edit-form">
+      <label>Comando <input class="re-c" type="text"></label>
+      <label>Título <input class="re-l" type="text"></label>
+      <label>Tono <input class="re-t" type="text"></label>
+      <label>Categoría <select class="re-cat"></select></label>
+      <label>Mensaje <textarea class="re-m" rows="7"></textarea></label>
+      <div class="rr-edit-actions">
+        <button class="btn danger small re-del" type="button">Eliminar</button>
+        <button class="btn ghost small re-reset" type="button" hidden>Restablecer</button>
+        <span class="re-err"></span><span class="spacer"></span>
+        <button class="btn ghost small re-cancel" type="button">Cancelar</button>
+        <button class="btn primary small re-save" type="button">Guardar</button>
+      </div>
+    </div>`;
+  card.querySelector('.rr-cmd').textContent = it.c;
+  card.querySelector('.rr-tone').textContent = it.t;
+  const label = card.querySelector('.rr-label');
+  label.textContent = it.l;
+  if(!it._base) label.insertAdjacentHTML('beforeend', '<span class="badge own">Propia</span>');
+  else if(it._edited) label.insertAdjacentHTML('beforeend', '<span class="badge edited">Editada</span>');
+  card.querySelector('.rr-text').innerHTML = highlight(fill(it.m));
+
+  const copyBtn = card.querySelector('.rr-copy');
+  copyBtn.addEventListener('click', () => copyText(fill(it.m)).then(() => {
+    copyBtn.classList.add('copied'); copyBtn.textContent = 'Copiado';
+    setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.innerHTML = ICON_COPY + ' Copiar'; }, 1600);
+  }));
+
+  const f = card.querySelector('.rr-edit-form');
+  const [fC, fL, fT, fCat, fM] = ['.re-c', '.re-l', '.re-t', '.re-cat', '.re-m'].map(s => f.querySelector(s));
+  const err = f.querySelector('.re-err'), resetBtn = f.querySelector('.re-reset'), delBtn = f.querySelector('.re-del');
+  let armed = false, armTimer = null;
+  const disarm = () => { armed = false; delBtn.textContent = 'Eliminar'; delBtn.classList.remove('armed'); clearTimeout(armTimer); };
+
+  card.querySelector('.rr-edit').addEventListener('click', () => {
+    const cats = effectiveGroups().map(g => g.cat);
+    if(!cats.includes(catName)) cats.push(catName);
+    fCat.innerHTML = cats.map(c => `<option>${esc(c)}</option>`).join('');
+    fC.value = it.c; fL.value = it.l; fT.value = it.t; fM.value = it.m; fCat.value = catName;
+    err.textContent = ''; resetBtn.hidden = !it._edited; disarm();
+    card.classList.add('editing'); fL.focus();
+  });
+  f.querySelector('.re-cancel').addEventListener('click', () => { card.classList.remove('editing'); disarm(); });
+  f.querySelector('.re-save').addEventListener('click', () => {
+    const l = fL.value.trim(), m = fM.value.trim();
+    if(!l || !m){ err.textContent = 'El título y el mensaje son obligatorios.'; return; }
+    let c = fC.value.trim(); if(c && !c.startsWith('/')) c = '/' + c;
+    const ov = loadOver();
+    ov[it.id] = {c: c || '/personalizado', l, t: fT.value.trim() || 'General', m, cat: fCat.value};
+    lsSet(RR_OVER, ov); rerenderRR();
+  });
+  delBtn.addEventListener('click', () => {
+    if(!armed){ armed = true; delBtn.textContent = it._base ? '¿Ocultar? Confirmar' : '¿Eliminar? Confirmar'; delBtn.classList.add('armed'); armTimer = setTimeout(disarm, 3500); return; }
+    disarm();
+    if(it._base){ const d = loadDel(); if(!d.includes(it.id)){ d.push(it.id); lsSet(RR_DEL, d); } }
+    else{ lsSet(RR_CUSTOM, loadCustom().filter(x => x.id !== it.id)); RESPUESTAS.forEach(g => { g.items = g.items.filter(x => x.id !== it.id); }); }
+    const ov = loadOver(); if(ov[it.id]){ delete ov[it.id]; lsSet(RR_OVER, ov); }
+    rerenderRR();
+  });
+  resetBtn.addEventListener('click', () => { const ov = loadOver(); delete ov[it.id]; lsSet(RR_OVER, ov); rerenderRR(); });
+  return card;
+}
+
+/* ---- agregar respuesta propia ---- */
+const $ = id => document.getElementById(id);
+const addForm = $('rr-add-form'), addToggle = $('rr-add-toggle');
+function fillAddOptions(){
+  const groups = effectiveGroups();
+  const tones = [...new Set(groups.flatMap(g => g.items.map(i => i.t)))].sort((a, b) => a.localeCompare(b, 'es'));
+  $('rr-add-cat').innerHTML = '<option value="">Seleccionar categoría…</option>' + groups.map(g => `<option>${esc(g.cat)}</option>`).join('') + '<option value="__new__">+ Nueva categoría…</option>';
+  $('rr-add-tone').innerHTML = '<option value="">Seleccionar tono…</option>' + tones.map(t => `<option>${esc(t)}</option>`).join('') + '<option value="__new__">+ Otro tono…</option>';
+}
+function closeAdd(){ addForm.setAttribute('hidden', ''); addToggle.classList.remove('open'); }
+function resetAdd(){ ['rr-add-cat', 'rr-add-tone', 'rr-add-cmd', 'rr-add-label', 'rr-add-msg', 'rr-add-cat-new', 'rr-add-tone-new'].forEach(id => $(id).value = ''); $('rr-add-cat-new').hidden = true; $('rr-add-tone-new').hidden = true; $('rr-add-error').style.display = 'none'; }
+addToggle.addEventListener('click', () => { if(addForm.hasAttribute('hidden')){ fillAddOptions(); addForm.removeAttribute('hidden'); addToggle.classList.add('open'); } else closeAdd(); });
+$('rr-add-cat').addEventListener('change', e => { $('rr-add-cat-new').hidden = e.target.value !== '__new__'; });
+$('rr-add-tone').addEventListener('change', e => { $('rr-add-tone-new').hidden = e.target.value !== '__new__'; });
+$('rr-add-cancel').addEventListener('click', () => { resetAdd(); closeAdd(); });
+$('rr-add-save').addEventListener('click', () => {
+  const cat = ($('rr-add-cat').value === '__new__' ? $('rr-add-cat-new').value : $('rr-add-cat').value).trim();
+  const tone = ($('rr-add-tone').value === '__new__' ? $('rr-add-tone-new').value : $('rr-add-tone').value).trim();
+  const label = $('rr-add-label').value.trim(), msg = $('rr-add-msg').value.trim();
+  let cmd = $('rr-add-cmd').value.trim(); if(cmd && !cmd.startsWith('/')) cmd = '/' + cmd;
+  if(!cat || !tone || !label || !msg){ $('rr-add-error').textContent = 'Complete categoría, tono, título y mensaje.'; $('rr-add-error').style.display = 'block'; return; }
+  const item = {id: 'c-' + Date.now(), cat, c: cmd || '/personalizado', l: label, t: tone, m: msg};
+  mergeCustom(item);
+  const stored = loadCustom(); stored.push(item); lsSet(RR_CUSTOM, stored);
+  resetAdd(); closeAdd();
+  renderRespuestas($('rr-search').value, {keepOpen: [cat]});
+});
+$('rr-search').addEventListener('input', e => renderRespuestas(e.target.value));
+renderRespuestas('');
+</script>
+
+<script>
+/* =====================================================================
+   INFORMACIÓN BÁSICA — VELARA
+   Fuentes: velara/sitio/src/data (services.ts, recursos.ts, site.ts) y
+   Velara CRM (Cotizaciones › Plantillas y tarifas). Si algo cambia allá,
+   cambiarlo aquí también.
+   ===================================================================== */
+const kv = rows => '<table class="kv">' + rows.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>';
+const tbl = (h, rows) => '<table class="tbl"><thead><tr>' + h.map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+const ul = items => '<ul class="list">' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+const ol = items => '<ol class="list">' + items.map(i => '<li>' + i + '</li>').join('') + '</ol>';
+const note = (t, k) => '<div class="note' + (k ? ' ' + k : '') + '">' + t + '</div>';
+
+const INFO = [
+ {cat:'Datos de la empresa', items:[
+  {l:'Contacto y ubicación', b: kv([
+    ['Nombre', 'VELARA · taller de cuero y tapicería'],
+    ['WhatsApp y teléfono', '+57 ' + EMPRESA.whatsapp],
+    ['Correo', EMPRESA.correo],
+    ['Dirección', EMPRESA.direccion],
+    ['Horario', EMPRESA.horario.charAt(0).toUpperCase() + EMPRESA.horario.slice(1)],
+    ['Redes', 'Solo WhatsApp por ahora'],
+    ['Eslogan', 'Soluciones a medida']
+  ]) + note('El horario está <b>por confirmar</b>. Si cambia un dato de contacto, se cambia el mismo día en la página web, en Velara CRM (Ajustes) y aquí.') },
+  {l:'Cómo hablamos', b: ul([
+    'Trato de <b>usted</b>, español de Colombia.',
+    'Frases cortas y claras. Una idea por mensaje.',
+    'Nombres correctos del oficio: cielo, forro a la medida, lona de PVC, cuerina.',
+    'Cifras concretas: tiempos, garantías, medidas.',
+    'Nada de superlativos vacíos («los mejores», «calidad insuperable») ni signos de admiración en cadena.'
+  ]) }
+ ]},
+ {cat:'Tiempos de respuesta', items:[
+  {l:'Compromisos de atención', b: tbl(['Momento','Tiempo máximo','Si no se cumple'], [
+    ['Primera respuesta (en horario)', '10 minutos', 'Responder con /saludo3 y disculpa por la demora'],
+    ['Registro del cliente en el CRM', 'El mismo día', 'Queda como pendiente en el informe diario'],
+    ['Envío de la cotización', 'Menos de 24 horas con los datos completos', 'Avisar al cliente la nueva hora'],
+    ['Seguimiento de la cotización', '24 horas (pendiente) y 72 horas (urgente)', 'Aparece en Seguimiento del CRM'],
+    ['Cliente sin respuesta', '3 intentos en 7 días', 'Marcar como perdido con el motivo'],
+    ['Reactivación', '30 a 60 días después del cierre', '/reactivacion']
+  ]) },
+  {l:'Seguimiento programado', b: tbl(['Momento','Cuándo','Mensaje'], [
+    ['Después de enviar la cotización', '24 horas', '/postcotiza'],
+    ['Sin respuesta · intento 1', '48 horas', '/nocontesta'],
+    ['Sin respuesta · intento 2', '4 días', '/nocontesta2'],
+    ['Sin respuesta · intento 3 (cierre)', '7 días', '/nocontesta3'],
+    ['Reactivación', '30 a 60 días', '/reactivacion']
+  ]) }
+ ]},
+ {cat:'Forros para carros', items:[
+  {l:'Ficha del servicio', b: kv([
+    ['Qué es', 'Forros a la medida para asientos, puertas y techo. Patrón levantado sobre el carro, no tallas genéricas.'],
+    ['Incluye', 'Patrón sobre los asientos reales · corte y costura en tela técnica o cuerina · cierres y elásticos ocultos · aberturas para cinturón, airbag y consola · instalación el mismo día de la entrega'],
+    ['Opciones', 'Asientos delanteros · banca trasera · timón y palanca · juego completo · flotas y taxis'],
+    ['Materiales', 'Cuerina técnica · tela deportiva · neopreno · cuero'],
+    ['Tiempo típico', '1 a 3 días hábiles'],
+    ['Garantía', '6 meses en costura y cierres'],
+    ['Cobertura', 'Recepción en el taller · servicio express en el día']
+  ]) },
+  {l:'Preguntas para calificar', b: ul(['Marca, modelo y año', '¿Juego completo, solo delanteros o solo banca trasera?', 'Material y color', '¿Es particular, taxi o flota?', 'Fotos de las sillas']) }
+ ]},
+ {cat:'Tapizado automotriz', items:[
+  {l:'Ficha del servicio', b: kv([
+    ['Qué es', 'Rehacer sillas, paneles, techos y timones con patronaje sobre el vehículo y costura igual al diseño de fábrica.'],
+    ['Incluye', 'Diagnóstico pieza por pieza · patronaje sobre el vehículo · espumas nuevas donde haga falta · costura igualada a la de fábrica · registro fotográfico del proceso'],
+    ['Opciones', 'Sillas y asientos · paneles y tableros · cielos y techos · timones y consolas · flotas y vehículos de trabajo'],
+    ['Materiales', 'Cuero · vinilo técnico · Alcántara · telas técnicas'],
+    ['Tiempo típico', '1 a 3 semanas según el alcance (un juego de sillas, 1 a 2 semanas; interior completo o flota, 2 a 6 semanas)'],
+    ['Garantía', '12 meses en costura y material'],
+    ['Cobertura', 'Taller en Barranquilla · se va a medir en el área metropolitana']
+  ]) },
+  {l:'Fotos que se piden', b: ul(['Interior completo desde las dos puertas delanteras, con luz de día', 'Cada silla de frente y de perfil', 'Primeros planos de los daños', 'Tablero y paneles de puerta', 'Placa o ficha técnica']) + note('Con fotos se da un valor aproximado. El precio en firme se confirma con el vehículo en el taller.', 'tip') }
+ ]},
+ {cat:'Tapizado de motos', items:[
+  {l:'Ficha del servicio', b: kv([
+    ['Qué es', 'Reconstrucción del sillín desde la base: espuma, forma y material tratado para sol, lluvia y kilómetros.'],
+    ['Incluye', 'Espuma en dos densidades · forro tratado contra rayos UV · costura sellada · anclajes reforzados · prueba en calle antes de la entrega'],
+    ['Opciones', 'Sillines individuales · biplaza · baúles y maletas · motos de reparto · restauración de clásicas'],
+    ['Materiales', 'Vinilo náutico · cuero · espuma de alta densidad · hilo encerado'],
+    ['Marcas más atendidas', 'AKT · Bajaj · Yamaha · Honda · Suzuki (se atienden todas)'],
+    ['Tiempo típico', '3 a 7 días'],
+    ['Garantía', '12 meses en costura y material'],
+    ['Cobertura', 'Recepción en el taller · servicio para talleres de motos']
+  ]) },
+  {l:'Preguntas para calificar', b: ul(['Marca y modelo', '¿Individual, biplaza o baúl?', '¿Qué le pasa: roto, duro, hundido o solo cambio de material?', '¿Es moto de trabajo?', 'Foto de lado y de arriba']) }
+ ]},
+ {cat:'Carpas y toldos', items:[
+  {l:'Ficha del servicio', b: kv([
+    ['Qué es', 'Lona técnica cortada, reforzada y montada a la medida del local.'],
+    ['Incluye', 'Visita y medidas reales · patronaje con caída de agua calculada · costura doble sellada y cinchas de refuerzo · ojales de bronce y herrajes tratados · montaje y tensado'],
+    ['Opciones', 'Toldos de fachada (fijos o recogibles) · carpas para terraza · cubiertas y lonas · cerramientos y faldones · mantenimiento y retensado'],
+    ['Materiales', 'Lona acrílica · lona de PVC · cincha de refuerzo · herrajes de bronce'],
+    ['Tiempo típico', '2 a 4 semanas'],
+    ['Garantía', '24 meses en costura y confección; la lona según el fabricante'],
+    ['Cobertura', 'Barranquilla y municipios cercanos · visita de medición sin costo']
+  ]) },
+  {l:'Recomendaciones técnicas', b: ul(['En toldos de fachada, dar inclinación para que el agua corra y no se empoce.', 'Las estructuras de hierro no son inoxidables: necesitan pintura y mantenimiento.', 'Anclar al piso cuando la instalación es prolongada.', 'Limpiar la lona solo con jabón neutro, nunca con solventes.']) },
+  {l:'Preguntas para calificar', b: ul(['¿Qué espacio quiere cubrir: fachada, terraza, patio?', 'Medidas aproximadas (se confirman en la visita)', '¿Fijo o recogible?', '¿Lleva logo o color institucional?', 'Dirección para la visita']) + note('Para carpas no se cotiza con medidas por foto: se agenda la visita de medición sin costo.', 'tip') }
+ ]},
+ {cat:'Forros para equipos', items:[
+  {l:'Ficha del servicio', b: kv([
+    ['Qué es', 'Forros de protección para equipos médicos, de sonido y maquinaria, hechos sobre la medida real de cada pieza.'],
+    ['Incluye', 'Patrón sobre el equipo real · material según el uso (lavable, acolchado o impermeable) · aberturas para cables y controles · cremallera, velcro o cordón · producción en serie para equipos iguales'],
+    ['Opciones', 'Equipos médicos · equipos de sonido · maquinaria pesada'],
+    ['Materiales', 'Vinilo lavable · lona impermeable · acolchado · cremallera reforzada'],
+    ['Tiempo típico', '3 días a 2 semanas'],
+    ['Garantía', '6 meses en costura y cremalleras'],
+    ['Cobertura', 'Recepción en el taller · medición en sitio para equipos grandes']
+  ]) },
+  {l:'Preguntas para calificar', b: ul(['¿Qué equipo es?', 'Medidas: largo × ancho × alto', 'Cantidad', '¿Para polvo, transporte o intemperie?', '¿Lleva logo bordado o impreso?', 'Fotos del equipo']) }
+ ]},
+ {cat:'Datos para cotizar', items:[
+  {l:'Lo que pide Velara CRM', b: tbl(['Dato','¿Obligatorio?','Observación'], [
+    ['Nombre o razón social', 'Sí', 'Como aparece en el RUT si es empresa'],
+    ['Teléfono', 'Sí', 'El mismo de WhatsApp'],
+    ['Servicio', 'Sí', 'Con sus datos: marca, modelo y año; tipo y medidas'],
+    ['Cédula o NIT', 'Recomendado', 'Necesario para facturar'],
+    ['Correo', 'Recomendado', 'Para enviar la cotización y la factura'],
+    ['Dirección y ciudad', 'Recomendado', 'Define recogida, visita o envío']
+  ]) }
+ ]},
+ {cat:'Pagos y condiciones', items:[
+  {l:'Cómo se cobra', b: ul(['Por trabajo, no por hora. La cotización incluye material, mano de obra y montaje.', '50 % de anticipo para programar y comprar material; 50 % contra entrega.', 'Medios de pago: transferencia, tarjeta y efectivo.', 'Si al desarmar aparece un daño no visible, se informa y se acuerda antes de seguir.']) + note('Los <b>datos de pago</b> (cuenta bancaria) aún no están cargados en Velara CRM › Ajustes. Hasta entonces, /aprobada lleva [DATOS DE PAGO] para escribir a mano.') },
+  {l:'Política de precios', b: note('No se da un precio «al aire». Con fotos y medidas completas se puede dar un valor aproximado, aclarando que el precio en firme se confirma con la pieza a la vista. Un valor dicho sin datos se vuelve un compromiso.', 'danger') },
+  {l:'Carpas y forros (fabricación)', b: ul(['Anticipo del 50 % para iniciar; el saldo se paga antes de la entrega o el despacho.', 'El plazo se cuenta desde el anticipo y la aprobación completa del diseño.', 'Cambios después de aprobar el diseño corren por cuenta del cliente y pueden mover el plazo.', 'VELARA no responde por retrasos de causas externas: transporte, fuerza mayor, proveedores o información tardía del cliente.']) }
+ ]},
+ {cat:'Garantías', items:[
+  {l:'Plazos por servicio', b: tbl(['Servicio','Garantía'], [
+    ['Tapizado automotriz', '12 meses en costura y material'],
+    ['Tapizado de motos', '12 meses en costura y material'],
+    ['Carpas y toldos', '24 meses en costura y confección; la lona según el fabricante'],
+    ['Forros para carros', '6 meses en costura y cierres'],
+    ['Forros para equipos', '6 meses en costura y cremalleras']
+  ]) },
+  {l:'Qué cubre y qué no', b: '<p><b>Cubre</b> defectos de confección: costuras que se abren sin causa, materiales que fallan antes de tiempo en uso normal, piezas mal montadas. La reparación es sin costo, incluido el traslado dentro de Barranquilla.</p>' + ul(['No cubre el desgaste normal.', 'No cubre mal uso, accidentes, mascotas ni productos de limpieza inadecuados.', 'No cubre material traído por el cliente contra nuestra recomendación.', 'No cubre sol directo prolongado sin la protección indicada.']) },
+  {l:'Cómo se hace efectiva', b: ol(['El cliente escribe por WhatsApp con el número de orden y una foto (/garantia2).', 'Se revisa el caso.', 'Si aplica, se coordina la reparación en un plazo de 5 días hábiles.']) }
+ ]},
+ {cat:'Indicadores', items:[
+  {l:'Qué se mide (Velara CRM › Reportes)', b: tbl(['Indicador','Cómo se calcula','Qué dice'], [
+    ['Tiempo de primera respuesta', 'Minutos entre el mensaje y la respuesta', 'Agilidad de la atención'],
+    ['Tasa de cotización', 'Cotizados ÷ clientes nuevos', 'Cuántos contactos llegan a propuesta'],
+    ['Tasa de cierre', 'Ganados ÷ cotizados', 'Efectividad comercial'],
+    ['Conversión total', 'Ganados ÷ clientes nuevos', 'Rendimiento del embudo completo'],
+    ['Ticket promedio', 'Total vendido ÷ número de ventas', 'Valor medio de cada trabajo'],
+    ['Costo por cliente', 'Inversión en Google Ads ÷ clientes de Ads', 'Cuánto cuesta conseguir cada contacto'],
+    ['Motivo de pérdida', 'Distribución por causa', 'Si se pierde por precio, tiempo o servicio']
+  ]) }
+ ]}
+];
+
+function renderInfo(filter){
+  const list = document.getElementById('ib-list'), empty = document.getElementById('ib-empty');
+  const q = (filter || '').trim().toLowerCase();
+  list.innerHTML = '';
+  let shown = 0;
+  INFO.forEach(g => {
+    const items = g.items.filter(it => !q || it.l.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q) || it.b.replace(/<[^>]*>/g, ' ').toLowerCase().includes(q));
+    if(!items.length) return;
+    shown += items.length;
+    const div = document.createElement('div');
+    div.className = 'cat' + (q ? ' open' : '');
+    div.innerHTML = `<button class="cat-head"><span class="cat-title"><span class="n">${esc(g.cat)}</span><span class="cat-count">${items.length}</span></span>${CHEV}</button><div class="cat-body ib-body"></div>`;
+    const body = div.querySelector('.ib-body');
+    items.forEach(it => { const c = document.createElement('div'); c.className = 'ib-card'; c.innerHTML = '<h4>' + esc(it.l) + '</h4>' + it.b; body.appendChild(c); });
+    div.querySelector('.cat-head').addEventListener('click', () => div.classList.toggle('open'));
+    list.appendChild(div);
+  });
+  empty.style.display = shown ? 'none' : 'block';
+}
+document.getElementById('ib-search').addEventListener('input', e => renderInfo(e.target.value));
+renderInfo('');
+</script>
+</body>
+</html>
