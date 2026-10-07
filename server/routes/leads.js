@@ -571,6 +571,58 @@ router.get('/quotations', async (req, res) => {
   res.json({ quotations, odoo_error: odooError });
 });
 
+// GET /api/leads/pipeline -- el embudo de ventas: leads abiertos + ganados y
+// perdidos de los últimos 30 días, cada uno con su última cotización, su
+// trabajo (si ya lo hay) y los pendientes del día.
+router.get('/pipeline', async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT l.* FROM leads l
+        WHERE l.status IN ('asignado', 'contactado', 'cotizado')
+           OR (l.status LIKE 'cerrado%' AND l.closed_at >= datetime('now', '-30 days'))
+        ORDER BY l.created_at DESC`
+    )
+    .all();
+  const quotes = await db
+    .prepare(
+      `SELECT q.id, q.lead_id, q.number, q.amount_total, q.state, q.created_at FROM quotations q
+        WHERE q.state != 'cancel' AND q.id IN (SELECT MAX(id) FROM quotations WHERE state != 'cancel' GROUP BY lead_id)`
+    )
+    .all();
+  const qByLead = new Map(quotes.map((q) => [q.lead_id, q]));
+  const jobs = await db.prepare("SELECT id, lead_id, number, stage FROM work_orders WHERE stage != 'cancelada' AND lead_id IS NOT NULL").all();
+  const jByLead = new Map(jobs.map((j) => [j.lead_id, j]));
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+  const visible = rows.filter((l) => canOperateOn(req.user, l));
+  const out = await Promise.all(
+    visible.map(async (l) => {
+      const s = await serialize(l);
+      const q = qByLead.get(l.id) || null;
+      return {
+        ...s,
+        quotation: q,
+        work_order: jByLead.get(l.id) || null,
+        action_due: !!l.next_action_at && l.next_action_at.slice(0, 10) <= today && !l.status.startsWith('cerrado'),
+      };
+    })
+  );
+  res.json({ today, rows: out });
+});
+
+// PATCH /api/leads/:id/next-action { at: 'AAAA-MM-DD' | null, note } -- el
+// próximo paso con un cliente ("llamar el jueves"); null lo borra.
+router.patch('/:id/next-action', async (req, res) => {
+  const id = Number(req.params.id);
+  const lead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
+  if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+  if (!canOperateOn(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso sobre este lead' });
+  const at = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.at || '')) ? req.body.at : null;
+  const note = at ? (String(req.body?.note || '').trim() || null) : null;
+  await db.prepare('UPDATE leads SET next_action_at = ?, next_action_note = ? WHERE id = ?').run(at, note, id);
+  broadcast('leads_changed', { reason: 'next_action', id });
+  res.json(await serialize(await db.prepare('SELECT * FROM leads WHERE id = ?').get(id)));
+});
+
 router.get('/:id', async (req, res) => {
   const lead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(Number(req.params.id));
   if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
@@ -621,10 +673,13 @@ const DEFAULT_SOURCE = 'WhatsApp';
 const DEFAULT_CHANNEL_DETAIL = 'Google Ads';
 
 router.post('/', requireRole('coordinador', 'admin'), async (req, res) => {
-  const { client_name, phone, document, product, notes, advisor_id, source, city, created_at, client_id, address, email, gclid } = req.body || {};
+  const { client_name, phone, document, product, notes, advisor_id, source, city, created_at, client_id, address, email, gclid, channel_detail } = req.body || {};
   if (!client_name || !client_name.trim()) return res.status(400).json({ error: 'client_name es requerido' });
   if (!phone || !phone.trim()) return res.status(400).json({ error: 'phone es requerido' });
-  const advisor = await db.prepare('SELECT * FROM advisors WHERE id = ? AND active = true').get(Number(advisor_id));
+  // Sin asesor elegido (negocio de un solo asesor) se asigna al primero activo.
+  const advisor = advisor_id
+    ? await db.prepare('SELECT * FROM advisors WHERE id = ? AND active = true').get(Number(advisor_id))
+    : await db.prepare('SELECT * FROM advisors WHERE active = true AND is_group = 0 ORDER BY priority_order LIMIT 1').get();
   if (!advisor) return res.status(400).json({ error: 'Selecciona un asesor activo para asignar el lead' });
   let client = null;
   if (client_id) {
@@ -655,7 +710,7 @@ router.post('/', requireRole('coordinador', 'admin'), async (req, res) => {
       // "Google Ads" para todo lead nuevo (asi lo pidio el negocio: en la
       // practica todo lo que entra es de ads), para no romper el reporte de
       // Rentabilidad de Leads / ROI que depende de este campo.
-      DEFAULT_CHANNEL_DETAIL,
+      CHANNEL_DETAILS.includes(channel_detail) ? channel_detail : DEFAULT_CHANNEL_DETAIL,
       (city && city.trim()) || null,
       now,
       client ? client.id : null,
@@ -1094,7 +1149,7 @@ router.post('/:id/close', async (req, res) => {
   const lead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
   if (!canOperateOn(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso sobre este lead' });
-  const { result, amount, at, sale_reference } = req.body || {};
+  const { result, amount, at, sale_reference, lost_reason } = req.body || {};
   if (!['ganado', 'perdido'].includes(result)) return res.status(400).json({ error: 'result debe ser ganado|perdido' });
   if (lead.status.startsWith('cerrado')) {
     return res.status(409).json({ error: 'Este lead ya esta cerrado' });
@@ -1130,6 +1185,9 @@ router.post('/:id/close', async (req, res) => {
       id
     );
 
+  if (result === 'perdido') {
+    await db.prepare('UPDATE leads SET lost_reason = ?, next_action_at = NULL, next_action_note = NULL WHERE id = ?').run((lost_reason && String(lost_reason).trim()) || null, id);
+  }
   let closedLead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
 
   // Sincronizar con Odoo: una venta ganada CONFIRMA la cotización -> pasa a

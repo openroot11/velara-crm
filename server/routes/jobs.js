@@ -270,12 +270,49 @@ router.post('/from-quotation', manage, async (req, res) => {
 // y, si no existe, el cliente, para que los abonos y el saldo funcionen.
 router.post('/', manage, async (req, res) => {
   const b = req.body || {};
-  const clientName = text(b.client_name);
-  if (!clientName) return res.status(400).json({ error: 'Escribe el nombre del cliente' });
   const amount = round(b.amount_total);
   if (amount < 0) return res.status(400).json({ error: 'El valor no puede ser negativo' });
+  const service = b.service_slug ? velaraServices.findService(b.service_slug) : null;
+
+  // Para una venta que ya existe (ej. "Ganado" en el embudo sin cotización):
+  // no se crea otro cliente ni otra venta, se usa esa y se marca ganada.
+  if (b.lead_id) {
+    const lead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(Number(b.lead_id));
+    if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
+    try {
+      const id = await db.transaction(async () => {
+        if (!String(lead.status).startsWith('cerrado')) {
+          await db.prepare("UPDATE leads SET status = 'cerrado_ganado', closed_at = ?, amount = ? WHERE id = ?").run(erp.nowUtc(), amount, lead.id);
+        }
+        return insertJob(
+          {
+            lead_id: lead.id,
+            client_name: lead.client_name,
+            phone: lead.phone,
+            address: text(b.address) || lead.address,
+            service_slug: service ? service.slug : null,
+            service_fields: {},
+            description: text(b.description) || lead.product,
+            amount_total: amount,
+            worker_id: await workerId(b.worker_id),
+            labor_cost: b.labor_cost,
+            promised_date: isoDate(b.promised_date),
+            notes: text(b.notes) || lead.notes,
+          },
+          req.user
+        );
+      })();
+      broadcast('leads_changed', { reason: 'won', id: lead.id });
+      changed(id, 'created');
+      return res.status(201).json(await readJob(id));
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message });
+    }
+  }
+
+  const clientName = text(b.client_name);
+  if (!clientName) return res.status(400).json({ error: 'Escribe el nombre del cliente' });
   try {
-    const service = b.service_slug ? velaraServices.findService(b.service_slug) : null;
     const id = await db.transaction(async () => {
       let client = b.client_id ? await db.prepare('SELECT * FROM clients WHERE id = ?').get(Number(b.client_id)) : null;
       const phone = text(b.phone);

@@ -864,18 +864,11 @@ CREATE TABLE IF NOT EXISTS quotation_lines (
   position INTEGER NOT NULL DEFAULT 0
 );
 
--- Todo lo que NO sea Google Ads queda fuera de las vistas operativas/
--- agregadas del programa (Ventas, SLA, Seguimiento, Estadisticas, Dashboard,
--- Informe, Asesores) a peticion del negocio -- hoy coincide 100% con el lote
--- historico importado de Odoo en agosto (is_historical=1), pero la regla es
--- por canal, no por ese flag, asi que tambien aplica a cualquier lead futuro
--- que no sea de Ads. Los datos NO se borran de "leads" (siguen intactos ahi,
--- respaldos y backups los siguen incluyendo completos); esta vista es
--- puramente de lectura para esas pantallas. Ficha de Clientes (routes/
--- clients.js) sigue leyendo "leads" directamente a proposito, para no perder
--- el historial de compras de un cliente aunque su lead quede oculto aqui.
+-- Vista que leen las pantallas de ventas y los reportes. Antes dejaba solo
+-- los leads de Google Ads (regla del negocio anterior); Velara cuenta todos
+-- los canales, así que hoy es la tabla completa (ver init()).
 CREATE VIEW IF NOT EXISTS leads_visible AS
-SELECT * FROM leads WHERE channel_detail = 'Google Ads';
+SELECT * FROM leads;
 `;
 
 async function seedIfEmpty() {
@@ -1124,6 +1117,15 @@ async function init() {
   // Trabajos (server/routes/jobs.js): pago acordado al operario por el
   // trabajo, dirección de instalación y motivo si se cancela.
   ensureColumn('work_orders', 'labor_cost', 'REAL NOT NULL DEFAULT 0');
+  // Ventas (embudo): por qué se perdió una venta y el próximo paso con fecha
+  // ("llamar el jueves"), que aparece en los pendientes del día.
+  ensureColumn('leads', 'lost_reason', 'TEXT');
+  ensureColumn('leads', 'next_action_at', 'TEXT');
+  ensureColumn('leads', 'next_action_note', 'TEXT');
+  // Velara es un negocio nuevo con clientes de todos los canales: los
+  // reportes y listas cuentan todos los leads, no solo los de Google Ads
+  // (era un filtro del negocio anterior).
+  exec('DROP VIEW IF EXISTS leads_visible; CREATE VIEW leads_visible AS SELECT * FROM leads;');
   ensureColumn('work_orders', 'address', 'TEXT');
   ensureColumn('work_orders', 'cancel_reason', 'TEXT');
   await seedAccounts();

@@ -6,18 +6,24 @@
 
 export const APPS = [
   {
+    // Ventas: un embudo por etapas en lugar de Leads/Seguimiento/
+    // Cotizaciones/Ventas cerradas (pensadas para un equipo de asesores);
+    // esas pantallas siguen existiendo pero salen del menú.
     key: 'comercial',
-    label: 'Comercial',
-    desc: 'Leads, cotizaciones, ventas y clientes',
+    label: 'Ventas',
+    desc: 'Clientes interesados, cotizaciones y ventas',
     icon: 'storefront',
     color: '#E4572E',
     routes: [
+      ['embudo', 'Embudo'],
+      ['cotizar', 'Cotizar'],
+      ['clientes', 'Clientes'],
+    ],
+    hidden: [
       ['ventas', 'Leads'],
       ['seguimiento', 'Seguimiento'],
-      ['cotizar', 'Cotizar'],
       ['cotizaciones', 'Cotizaciones'],
       ['ventas-cerradas', 'Ventas cerradas'],
-      ['clientes', 'Clientes'],
     ],
   },
   {
@@ -102,12 +108,12 @@ export const APPS = [
 // de Inventario y los operarios; no ve finanzas ni el embudo comercial.
 const PRODUCCION = ['trabajos', 'produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
 export const ROUTES_BY_ROLE = {
-  admin: ['inicio', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
-  coordinador: ['inicio', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
+  admin: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
+  coordinador: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
   produccion: ['inicio', ...PRODUCCION, 'inventario', 'operarios'],
   // Un asesor opera lo suyo: su embudo comercial y el avance en producción
   // de sus clientes (el backend le filtra las OP a las de sus leads).
-  asesor: ['inicio', 'ventas', 'cotizaciones', 'cotizar', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
+  asesor: ['inicio', 'embudo', 'ventas', 'cotizaciones', 'cotizar', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
 };
 
 const LABELS = { inicio: 'Inicio' };
