@@ -541,6 +541,20 @@ CREATE TABLE IF NOT EXISTS account_transfers (
 -- Gastos fijos que se repiten cada mes (arriendo, servicios, internet...).
 -- Pagar uno crea el egreso en cash_entries con recurring_id; así se sabe
 -- cuáles faltan por pagar en el mes.
+-- Fotos y archivos de un trabajo (antes, después, diseño...).
+CREATE TABLE IF NOT EXISTS work_order_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_order_id INTEGER NOT NULL REFERENCES work_orders(id),
+  kind TEXT NOT NULL DEFAULT 'otro',
+  original_name TEXT,
+  stored_path TEXT NOT NULL,
+  mime TEXT,
+  size INTEGER,
+  uploaded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_work_order_files_wo ON work_order_files(work_order_id);
+
 CREATE TABLE IF NOT EXISTS recurring_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -1107,6 +1121,11 @@ async function init() {
   ensureColumn('cash_entries', 'receipt_mime', 'TEXT');
   ensureColumn('payments', 'account_id', 'INTEGER REFERENCES accounts(id)');
   ensureColumn('payments', 'work_order_id', 'INTEGER REFERENCES work_orders(id)');
+  // Trabajos (server/routes/jobs.js): pago acordado al operario por el
+  // trabajo, dirección de instalación y motivo si se cancela.
+  ensureColumn('work_orders', 'labor_cost', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn('work_orders', 'address', 'TEXT');
+  ensureColumn('work_orders', 'cancel_reason', 'TEXT');
   await seedAccounts();
   await backfillAccounts();
   await seedIfEmpty();

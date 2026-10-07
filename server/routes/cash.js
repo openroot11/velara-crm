@@ -646,7 +646,7 @@ router.get('/profitability', async (req, res) => {
   const all = req.query.scope === 'todos';
   const orders = await db
     .prepare(
-      `SELECT wo.*, w.name AS worker_name,
+      `SELECT wo.*, wo.labor_cost AS agreed_labor, w.name AS worker_name,
               COALESCE((SELECT -SUM(sm.qty * sm.unit_cost) FROM stock_movements sm WHERE sm.work_order_id = wo.id AND sm.type IN ('consumo', 'devolucion')), 0) AS materials_cost,
               COALESCE((SELECT SUM(ce.amount) FROM cash_entries ce WHERE ce.work_order_id = wo.id AND ce.kind = 'egreso' AND ce.category = ?), 0) AS labor_cost,
               COALESCE((SELECT SUM(ce.amount) FROM cash_entries ce WHERE ce.work_order_id = wo.id AND ce.kind = 'egreso' AND ce.category != ?), 0) AS other_cost
@@ -659,7 +659,8 @@ router.get('/profitability', async (req, res) => {
   const rows = orders.map((o) => {
     const revenue = round((Number(o.amount_total) || 0) / 1.19);
     const materials = round(o.materials_cost);
-    const labor = round(o.labor_cost);
+    // El pago acordado al operario cuenta aunque todavía no se le haya pagado.
+    const labor = Math.max(round(o.labor_cost), round(o.agreed_labor));
     const other = round(o.other_cost);
     const cost = materials + labor + other;
     return {

@@ -716,7 +716,7 @@ export async function mount(container, ctx) {
     if (next) {
       buttons.push(`<button type="button" id="cz-next-state" class="btn btn-secondary w-full justify-center">${next.label}</button>`);
     }
-    if (quotation.state === 'aprobada' || quotation.state === 'sale') buttons.push('<div id="cz-wo"></div>');
+    if (quotation.state !== 'cancel') buttons.push('<div id="cz-wo"></div>');
     el.innerHTML = buttons.join('');
     renderWorkOrderAction(el.querySelector('#cz-wo'));
     el.querySelector('#cz-whatsapp')?.addEventListener('click', sendWhatsApp);
@@ -828,32 +828,32 @@ export async function mount(container, ctx) {
     actionsEl.querySelector('#cz-save').addEventListener('click', save);
   }
 
-  // Producción: una cotización aprobada (o ya vendida) se envía a producción
-  // como Pedido (PED-...), que producción valida y convierte en una o varias
-  // OP. Si ya se envió, el botón lleva a ese pedido.
+  // Trabajos: cuando el cliente acepta, "Crear trabajo" marca la venta como
+  // ganada y pasa la cotización al tablero de Trabajos (ver routes/jobs.js).
+  // Si ya se creó, el botón lleva a ese trabajo.
   async function renderWorkOrderAction(slot) {
     if (!slot) return;
     const forQuotation = quotation.id;
     let existing = null;
     try {
-      const list = await ctx.api.get('/api/production/orders');
-      existing = list.find((o) => o.quotation_id === forQuotation && o.status !== 'cancelado') || null;
+      const list = await ctx.api.get('/api/jobs?all=1');
+      existing = list.find((j) => j.quotation_id === forQuotation && j.stage !== 'cancelada') || null;
     } catch {
-      return; // sin acceso a producción, no se muestra nada
+      return; // sin acceso a Trabajos, no se muestra nada
     }
     if (!quotation || quotation.id !== forQuotation || !slot.isConnected) return;
     if (existing) {
-      slot.innerHTML = `<a href="#/pedidos?id=${existing.id}" class="btn btn-secondary w-full justify-center inline-flex"><span class="material-symbols-outlined">precision_manufacturing</span>En producción · ${escapeHtml(existing.number)}</a>`;
+      slot.innerHTML = `<a href="#/trabajos?id=${existing.id}" class="btn btn-secondary w-full justify-center inline-flex"><span class="material-symbols-outlined">construction</span>Ver trabajo ${escapeHtml(existing.number)}</a>`;
       return;
     }
-    slot.innerHTML = `<button type="button" class="btn btn-secondary w-full justify-center"><span class="material-symbols-outlined">precision_manufacturing</span>Enviar a producción</button>`;
+    slot.innerHTML = `<button type="button" class="btn btn-secondary w-full justify-center"><span class="material-symbols-outlined">construction</span>El cliente aceptó · Crear trabajo</button>`;
     slot.querySelector('button').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
-        const so = await ctx.api.post('/api/production/orders/from-quotation', { quotation_id: quotation.id });
-        ctx.toast(`Enviada a producción como ${so.number}`, 'success');
-        renderWorkOrderAction(slot);
+        const job = await ctx.api.post('/api/jobs/from-quotation', { quotation_id: quotation.id });
+        ctx.toast(`Trabajo ${job.number} creado y venta marcada como ganada`, 'success');
+        ctx.navigate('trabajos', { id: job.id });
       } catch (err) {
         ctx.toast(err.message, 'error');
         btn.disabled = false;

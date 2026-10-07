@@ -82,6 +82,8 @@ async function main() {
   app.use('/api/production', require('./routes/production'));
   // ERP: operarios, inventario de materiales, compras y caja (apps aparte;
   // Producción no toca inventario).
+  // Trabajos del taller (tablero simple por etapas, ver routes/jobs.js).
+  app.use('/api/jobs', require('./routes/jobs'));
   app.use('/api/workers', require('./routes/workers'));
   app.use('/api/materials', require('./routes/materials'));
   app.use('/api/purchases', require('./routes/purchases'));

@@ -328,6 +328,9 @@
       border-color: var(--c-outline);
     }
     ::placeholder { color: var(--c-outline); opacity: 1; }
+    /* Las vistas ponen p-2/p-2.5 en los select y eso pisa el espacio de la
+       flecha: el texto largo quedaba encima de ella. */
+    select { padding-right: 2.25rem !important; }
     [type='checkbox'], [type='radio'] {
       color: var(--c-check);
       border-color: var(--c-outline);

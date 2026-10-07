@@ -21,20 +21,18 @@ export const APPS = [
     ],
   },
   {
-    key: 'produccion',
-    label: 'Producción',
-    desc: 'Pedidos, órdenes de producción y entregas',
-    icon: 'precision_manufacturing',
+    // Trabajos del taller: tablero simple por etapas (reemplaza la
+    // producción por pedidos/OP, que era para una fábrica -- sus pantallas
+    // siguen existiendo pero ya no van en el menú).
+    key: 'trabajos',
+    label: 'Trabajos',
+    desc: 'Lo que está en el taller, de la entrada a la entrega',
+    icon: 'construction',
     color: '#2A7F8F',
     routes: [
-      ['produccion', 'Tablero'],
-      ['pedidos', 'Pedidos'],
-      ['programacion', 'Programación'],
-      ['solicitudes-material', 'Solicitudes de material'],
-      ['garantias', 'Garantías'],
-      ['reportes-produccion', 'Reportes'],
+      ['trabajos', 'Tablero'],
+      ['operarios', 'Operarios'],
     ],
-    hidden: [['op', 'Orden de producción']],
   },
   {
     key: 'inventario',
@@ -89,12 +87,11 @@ export const APPS = [
   {
     key: 'config',
     label: 'Configuración',
-    desc: 'Equipo, operarios y ajustes',
+    desc: 'Equipo y ajustes',
     icon: 'settings',
     color: '#6B7280',
     routes: [
       ['asesores', 'Equipo de ventas'],
-      ['operarios', 'Operarios'],
       ['ajustes', 'Ajustes'],
     ],
   },
@@ -103,7 +100,7 @@ export const APPS = [
 // Pantallas permitidas por rol (el backend además protege cada endpoint).
 // produccion = jefe de producción/taller: toda la app Producción, consulta
 // de Inventario y los operarios; no ve finanzas ni el embudo comercial.
-const PRODUCCION = ['produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
+const PRODUCCION = ['trabajos', 'produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
 export const ROUTES_BY_ROLE = {
   admin: ['inicio', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
   coordinador: ['inicio', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
