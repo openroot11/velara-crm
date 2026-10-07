@@ -1,6 +1,8 @@
 import { escapeHtml, formatMoney, initials } from '../utils.js';
 import { openCloseModal } from '../components/leadActions.js';
 import { SERVICES, findService } from '../data/velaraServices.js';
+import { TEMPLATES } from '../data/quoteTemplates.js';
+import { openTemplateModal } from '../components/quoteTemplateModal.js';
 
 // Pestaña "Cotizar": motor de cotizaciones propio de Velara CRM, sin
 // ninguna dependencia de Odoo -- guarda todo en las tablas nativas del CRM
@@ -97,8 +99,8 @@ function stepCard(number, icon, title, desc, innerHtml, extraHeaderHtml = '') {
 export async function mount(container, ctx) {
   container.innerHTML = `
     <div class="mb-gutter">
-      <h2 class="text-headline-lg font-headline-lg text-on-surface mb-base">Cotizar</h2>
-      <p class="text-body-md font-body-md text-on-surface-variant">Busca un cliente (o registra uno nuevo), elige el servicio y arma su cotización en la misma pantalla -- guardado directo en Velara CRM, sin pasar por Odoo.</p>
+      <h2 class="text-headline-lg font-headline-lg text-on-surface mb-base">Nueva cotización</h2>
+      <p class="text-body-md font-body-md text-on-surface-variant">Busque un cliente (o registre uno nuevo), elija el servicio y arme la cotización. Use una plantilla para calcular carpas, forros o productos especiales.</p>
     </div>
     <div id="cz-root"></div>
   `;
@@ -111,6 +113,15 @@ export async function mount(container, ctx) {
   let selectedServiceSlug = null;
   let serviceFieldValues = {};
   let advisorsCache = [];
+  // Tarifas, catálogo y observaciones de las plantillas (Cotizaciones ›
+  // Plantillas y tarifas). Sin esto la pantalla funciona igual, solo sin
+  // la barra de plantillas.
+  let templateConfig = null;
+  try {
+    templateConfig = (await ctx.api.get('/api/quote-templates')).config;
+  } catch {
+    templateConfig = null;
+  }
   if (ctx.user?.role !== 'asesor') {
     try {
       advisorsCache = (await ctx.api.get('/api/advisors')).filter((a) => !a.is_group && a.active);
@@ -352,7 +363,7 @@ export async function mount(container, ctx) {
             <input data-prod type="hidden" />
             <div data-prod-results class="hidden fixed z-[9999] bg-surface border border-outline-variant rounded-md shadow-lg max-h-52 overflow-y-auto"></div>
           </div>
-          <input data-description type="text" placeholder="Descripción (opcional)" class="w-full p-1.5 mt-1.5 border-0 border-b border-transparent hover:border-outline-variant focus:border-outline text-[12px] text-on-surface-variant outline-none bg-transparent" />
+          <textarea data-description rows="1" placeholder="Descripción (opcional)" class="w-full p-1.5 mt-1.5 border-0 border-b border-transparent hover:border-outline-variant focus:border-outline text-[12px] text-on-surface-variant outline-none bg-transparent resize-y"></textarea>
           <div class="flex items-end gap-3 mt-2 flex-wrap">
             <div>
               <label class="block text-[10px] font-label-bold uppercase text-on-surface-variant">Cantidad</label>
@@ -479,7 +490,10 @@ export async function mount(container, ctx) {
     if (preset) {
       if (preset.product_id) hidden.value = preset.product_id;
       if (preset.product_name) search.value = preset.product_name;
-      if (preset.description) description.value = preset.description;
+      if (preset.description) {
+        description.value = preset.description;
+        description.rows = Math.min(5, Math.ceil(preset.description.length / 90));
+      }
       if (preset.qty != null) qty.value = preset.qty;
       if (preset.price_unit != null) price.value = Math.round(preset.price_unit);
       if (preset.discount_percent) discountInput.value = preset.discount_percent;
@@ -511,6 +525,79 @@ export async function mount(container, ctx) {
         };
       })
       .filter((l) => l && l.product_name && l.qty > 0);
+  }
+
+  // ---- plantillas de cotización (data/quoteTemplates.js) ---------------------
+  function templateBar() {
+    if (!templateConfig) return '';
+    return `
+      <div class="mb-3">
+        <p class="text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1.5">Plantillas según lo que se va a fabricar</p>
+        <div class="flex flex-wrap gap-2">
+          ${TEMPLATES.map(
+            (t) => `<button type="button" data-template="${t.key}" title="${escapeHtml(t.desc)}" class="btn btn-secondary text-[12px]"><span class="material-symbols-outlined">${t.icon}</span>${escapeHtml(t.label)}</button>`
+          ).join('')}
+          <button type="button" data-quick-line="transporte" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">local_shipping</span>Transporte</button>
+          <button type="button" data-quick-line="logo" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">print</span>Logo / impresión</button>
+        </div>
+      </div>`;
+  }
+
+  function quickNotes() {
+    const notes = templateConfig?.observaciones || [];
+    if (!notes.length) return '';
+    return `<div class="flex flex-wrap gap-1.5 mt-2">${notes
+      .map(
+        (n) => `<button type="button" data-quick-note="${escapeHtml(n)}" class="px-2 py-1 rounded-full border border-outline-variant text-[11px] text-on-surface-variant hover:bg-surface-container-low">+ ${escapeHtml(n)}</button>`
+      )
+      .join('')}</div>`;
+  }
+
+  // Agrega las líneas que devolvió una plantilla. Quita la fila vacía del
+  // arranque y, si aún no hay servicio elegido, toma el de la plantilla y
+  // llena sus campos vacíos con lo calculado (tipo, medidas…).
+  function addTemplateLines(list, lines, { service_slug, hints }) {
+    list.querySelectorAll('[data-line]').forEach((row) => {
+      const search = row.querySelector('[data-prod-search]');
+      if (search && !search.value.trim()) row.remove();
+    });
+    lines.forEach((l) => appendLineRow(list, l, true));
+
+    if (service_slug && !selectedServiceSlug) {
+      selectedServiceSlug = service_slug;
+      serviceFieldValues = {};
+      const select = root.querySelector('#cz-service');
+      if (select) select.value = service_slug;
+    }
+    if (service_slug && service_slug === selectedServiceSlug) {
+      serviceFieldValues = { ...serviceFieldValues, ...readServiceFields() };
+      const service = findService(service_slug);
+      for (const f of service?.fields || []) {
+        if (serviceFieldValues[f.key] || !hints[f.key]) continue;
+        if (f.type === 'select' && !f.options.includes(hints[f.key])) continue;
+        serviceFieldValues[f.key] = hints[f.key];
+      }
+      renderServiceFields();
+    }
+    renderTotals();
+    ctx.toast(lines.length === 1 ? 'Línea agregada a la cotización' : `${lines.length} líneas agregadas`, 'success');
+  }
+
+  function wireTemplateBar(list) {
+    root.querySelectorAll('[data-template]').forEach((btn) => {
+      btn.addEventListener('click', () =>
+        openTemplateModal({ key: btn.dataset.template, config: templateConfig, onAdd: (lines, meta) => addTemplateLines(list, lines, meta) })
+      );
+    });
+    root.querySelectorAll('[data-quick-line]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const line =
+          btn.dataset.quickLine === 'transporte'
+            ? { product_name: 'Servicio de transporte', description: null, qty: 1, price_unit: templateConfig.transporte }
+            : { product_name: 'Servicio de impresión', description: 'Logo a una tinta.', qty: 1, price_unit: templateConfig.impresionLogo };
+        addTemplateLines(list, [line], { service_slug: null, hints: {} });
+      });
+    });
   }
 
   // ---- cliente: buscador + datos de facturación ------------------------------
@@ -755,6 +842,7 @@ export async function mount(container, ctx) {
                      </div>`
                   : ''
               }
+              ${isEditable() ? templateBar() : ''}
               <div id="cz-lines"></div>
               ${isEditable() ? `<button type="button" id="cz-add-line" class="btn btn-ghost mt-1 text-[12px]"><span class="material-symbols-outlined">add</span>Agregar concepto</button>` : ''}
             `
@@ -766,7 +854,8 @@ export async function mount(container, ctx) {
                   'sticky_note_2',
                   'Notas y condiciones',
                   'Incluya información adicional, tiempos de entrega o condiciones.',
-                  `<textarea id="cz-note" rows="3" placeholder="Opcional — se incluye en el PDF de la cotización" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20"></textarea>`
+                  `<textarea id="cz-note" rows="3" placeholder="Opcional — se incluye en el PDF de la cotización" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20"></textarea>
+                   ${quickNotes()}`
                 )
               : quotation.note
                 ? stepCard(4, 'sticky_note_2', 'Notas y condiciones', '', `<p class="text-body-sm text-on-surface-variant">${escapeHtml(quotation.note)}</p>`)
@@ -805,6 +894,14 @@ export async function mount(container, ctx) {
       appendLineRow(list, null, true);
     }
     root.querySelector('#cz-add-line')?.addEventListener('click', () => appendLineRow(list, null, true));
+    wireTemplateBar(list);
+    root.querySelectorAll('[data-quick-note]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const ta = root.querySelector('#cz-note');
+        if (!ta) return;
+        ta.value = (ta.value.trim() ? `${ta.value.trim()}\n` : '') + btn.dataset.quickNote;
+      });
+    });
 
     renderTotals();
     renderSummaryActions();

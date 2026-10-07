@@ -5,6 +5,7 @@ const { broadcast } = require('../realtime');
 const nativeQuotes = require('../nativeQuotes');
 const velaraServices = require('../velaraServices');
 const brand = require('../pdfBrand');
+const quoteTemplates = require('../quoteTemplates');
 
 const router = express.Router();
 
@@ -228,7 +229,8 @@ async function quoteSettings() {
     getSetting('quote_payment_details', ''),
     getSetting('quote_terms', ''),
   ]);
-  return { name, nit, address, phone, email, web, payment, terms };
+  const { politicasFabricacion } = await quoteTemplates.getConfig();
+  return { name, nit, address, phone, email, web, payment, terms, termsFabricacion: politicasFabricacion };
 }
 
 // Condiciones que trae la hoja oficial; se usan si en Ajustes no hay ninguna.
@@ -349,11 +351,16 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
   }
 
   // ---- condiciones comerciales --------------------------------------------
-  const terms = (cfg.terms || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  // Carpas y forros (fabricación) llevan sus propias políticas, editables en
+  // Cotizaciones › Plantillas y tarifas; el resto usa las de Ajustes.
+  const fabrication = quoteTemplates.isFabrication(quotation.service_slug) && (cfg.termsFabricacion || []).length;
+  const terms = fabrication
+    ? cfg.termsFabricacion.map((s) => String(s).trim()).filter(Boolean)
+    : (cfg.terms || '').split('\n').map((s) => s.trim()).filter(Boolean);
   const termLines = terms.length ? terms : DEFAULT_TERMS.slice();
   if (quotation.validity_date) termLines.push(`Esta cotización es válida hasta el ${fmtDateDMY(quotation.validity_date)}.`);
   y = brand.ensureSpace(doc, y, 50);
-  y = brand.sectionHeading(doc, 'Condiciones comerciales', PAGE.L, y);
+  y = brand.sectionHeading(doc, fabrication ? 'Políticas y condiciones' : 'Condiciones comerciales', PAGE.L, y);
   y = brand.bulletList(doc, PAGE.L, y, PAGE.W, termLines);
 
   // ---- cierre -----------------------------------------------------------------

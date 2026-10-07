@@ -137,6 +137,7 @@ const routes = {
   seguimiento: () => import('./views/seguimiento.js'),
   cotizaciones: () => import('./views/cotizaciones.js'),
   cotizar: () => import('./views/cotizar.js'),
+  'plantillas-cotizacion': () => import('./views/plantillasCotizacion.js'),
   embudo: () => import('./views/embudo.js'),
   trabajos: () => import('./views/trabajos.js'),
   produccion: () => import('./views/produccion.js'),

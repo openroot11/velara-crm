@@ -77,6 +77,7 @@ async function main() {
   // medio, ver server/nativeQuotes.js.
   app.use('/api/products', require('./routes/products'));
   app.use('/api/quotations', require('./routes/quotations'));
+  app.use('/api/quote-templates', require('./routes/quoteTemplates'));
   // Producción: pedidos, órdenes de producción, tareas, archivos, bloqueos,
   // control, aprobaciones, documentos y garantías (ver server/production.js).
   app.use('/api/production', require('./routes/production'));

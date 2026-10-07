@@ -16,14 +16,28 @@ export const APPS = [
     color: '#E4572E',
     routes: [
       ['embudo', 'Embudo'],
-      ['cotizar', 'Cotizar'],
       ['clientes', 'Clientes'],
     ],
     hidden: [
       ['ventas', 'Leads'],
       ['seguimiento', 'Seguimiento'],
-      ['cotizaciones', 'Cotizaciones'],
       ['ventas-cerradas', 'Ventas cerradas'],
+    ],
+  },
+  {
+    // Cotizaciones: su propio apartado. "Nueva cotización" trae las
+    // plantillas según lo que se fabrica (data/quoteTemplates.js); las
+    // tarifas, el catálogo y las políticas se ajustan en "Plantillas y
+    // tarifas". Todo queda ligado al lead y al embudo de Ventas.
+    key: 'cotizaciones',
+    label: 'Cotizaciones',
+    desc: 'Cotizar con plantillas, listado y tarifas',
+    icon: 'request_quote',
+    color: '#C7420E',
+    routes: [
+      ['cotizar', 'Nueva cotización'],
+      ['cotizaciones', 'Cotizaciones'],
+      ['plantillas-cotizacion', 'Plantillas y tarifas'],
     ],
   },
   {
@@ -108,8 +122,8 @@ export const APPS = [
 // de Inventario y los operarios; no ve finanzas ni el embudo comercial.
 const PRODUCCION = ['trabajos', 'produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
 export const ROUTES_BY_ROLE = {
-  admin: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
-  coordinador: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
+  admin: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
+  coordinador: ['inicio', 'embudo', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
   produccion: ['inicio', ...PRODUCCION, 'inventario', 'operarios'],
   // Un asesor opera lo suyo: su embudo comercial y el avance en producción
   // de sus clientes (el backend le filtra las OP a las de sus leads).
