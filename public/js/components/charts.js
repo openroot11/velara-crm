@@ -15,7 +15,7 @@ export function destroyChart(canvas) {
   if (canvas) destroyExisting(canvas);
 }
 
-const FONT = { family: "'Manrope', system-ui, sans-serif", size: 11 };
+const FONT = { family: "'Inter', system-ui, sans-serif", size: 11 };
 
 // Chart.js dibuja en <canvas> (no puede heredar color de CSS), asi que para
 // que texto/grid/lineas del chart tambien cambien con el modo oscuro (ver
@@ -47,7 +47,7 @@ export function barChart(canvas, { labels, data, color, valueFormatter = (v) => 
     type: 'bar',
     data: {
       labels,
-      datasets: [{ data, backgroundColor: color || cssVar('--c-primary', '#FF5A1F'), borderRadius: 4, maxBarThickness: 36 }],
+      datasets: [{ data, backgroundColor: color || cssVar('--c-primary', '#D71920'), borderRadius: 4, maxBarThickness: 36 }],
     },
     options: {
       responsive: true,
@@ -189,7 +189,7 @@ export function gaugeChart(canvas, { value, max, color, trackColor }) {
       datasets: [
         {
           data: [filled, safeMax - filled],
-          backgroundColor: [color || cssVar('--c-primary', '#FF5A1F'), trackColor || cssVar('--c-surface-container-highest', '#DCD9D2')],
+          backgroundColor: [color || cssVar('--c-primary', '#D71920'), trackColor || cssVar('--c-surface-container-highest', '#DCD9D2')],
           borderWidth: 0,
         },
       ],

@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { ws } from './ws.js';
 import { escapeHtml } from './utils.js';
 import { getCurrentUser, logout } from './auth.js';
-import { APPS, ROUTES_BY_ROLE, appOfRoute, routeLabel, visibleApps } from './apps.js';
+import { ROUTES_BY_ROLE, appOfRoute, routeLabel } from './apps.js';
 
 const user = getCurrentUser();
 
@@ -25,6 +25,15 @@ if (sidebarFoot && user) {
     </button>
   `;
   sidebarFoot.querySelector('#logout-btn').addEventListener('click', logout);
+}
+const topbarUser = document.getElementById('topbar-user');
+if (topbarUser && user) {
+  topbarUser.innerHTML = `
+    <div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-body-sm text-on-surface-variant shrink-0" title="${escapeHtml(`${user.username} · ${ROLE_LABELS[user.role] || user.role}`)}">${escapeHtml((user.username || '?').slice(0, 1).toUpperCase())}</div>
+    <button type="button" aria-label="Cerrar sesión" class="p-2 text-on-surface-variant hover:text-error transition-colors" title="Cerrar sesión">
+      <span class="material-symbols-outlined text-[20px]">logout</span>
+    </button>`;
+  topbarUser.querySelector('button').addEventListener('click', logout);
 }
 
 // Menu lateral ocultable: libera espacio horizontal en pantallas chicas o
@@ -54,13 +63,20 @@ function readCollapsed() {
 }
 
 let sidebarCollapsed = readCollapsed();
+// En Inicio no hay menú lateral: las tarjetas de aplicaciones ya son la
+// navegación, y un menú con los mismos destinos sobra. render() lo marca.
+let onHome = false;
 
 function applySidebar() {
   const mobile = mobileQuery.matches;
-  const hidden = mobile ? !mobileSidebarOpen : sidebarCollapsed;
+  const hidden = onHome || (mobile ? !mobileSidebarOpen : sidebarCollapsed);
   sidebarEl.classList.toggle('-translate-x-full', hidden);
+  sidebarEl.classList.toggle('invisible', onHome);
   sidebarEl.classList.toggle('shadow-xl', mobile && mobileSidebarOpen);
-  mainColEl.classList.toggle('lg:ml-[252px]', !sidebarCollapsed);
+  mainColEl.classList.toggle('lg:ml-[252px]', !onHome && !sidebarCollapsed);
+  sidebarToggleBtn.classList.toggle('hidden', onHome);
+  topbarUser?.classList.toggle('hidden', !onHome);
+  topbarUser?.classList.toggle('flex', onHome);
   sidebarBackdrop?.classList.toggle('hidden', !(mobile && mobileSidebarOpen));
   sidebarToggleBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
 }
@@ -173,28 +189,20 @@ const ctx = {
   routeParams: new URLSearchParams(),
 };
 
-// Menú lateral: en Inicio lista las aplicaciones; dentro de una aplicación
-// muestra solo sus pantallas (como Odoo), con un botón para volver a Inicio.
+// Menú lateral: solo existe dentro de una aplicación y muestra sus
+// pantallas (como Odoo), con un enlace para volver a Inicio. En Inicio se
+// oculta (ver applySidebar).
 function renderSidebar(route, app) {
   const linkCls = (active) =>
     `nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-      active ? 'bg-surface-container-high text-on-surface font-bold border-r-4 border-outline' : 'text-on-surface-variant hover:bg-surface-container-low'
+      active ? 'bg-surface-container-high text-on-surface font-bold shadow-[inset_3px_0_0_var(--c-primary)]' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
     }`;
   const homeLink = `
-    <li><a href="#/inicio" data-route="inicio" class="${linkCls(route === 'inicio')}"${route === 'inicio' ? ' aria-current="page"' : ''}>
+    <li><a href="#/inicio" data-route="inicio" class="${linkCls(false)}">
       <span class="material-symbols-outlined text-[20px]">apps</span><span class="text-label-bold font-label-bold">Inicio</span></a></li>`;
 
   if (!app) {
-    navList.innerHTML =
-      homeLink +
-      `<li class="px-3 pt-4 pb-1 text-[10px] font-label-bold uppercase tracking-wider text-on-surface-variant">Aplicaciones</li>` +
-      visibleApps(allowedRoutes)
-        .map(
-          (a) => `
-        <li><a href="#/${a.firstRoute}" class="${linkCls(false)}">
-          <span class="material-symbols-outlined text-[20px]" style="color:${a.color}">${a.icon}</span><span class="text-label-bold font-label-bold">${escapeHtml(a.label)}</span></a></li>`
-        )
-        .join('');
+    navList.innerHTML = '';
     return;
   }
 
@@ -202,7 +210,7 @@ function renderSidebar(route, app) {
   navList.innerHTML = `
     ${homeLink}
     <li class="px-3 pt-4 pb-2 flex items-center gap-2">
-      <span class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:${app.color}1f;color:${app.color}"><span class="material-symbols-outlined text-[20px]">${app.icon}</span></span>
+      <span class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-surface-container-high text-on-surface"><span class="material-symbols-outlined text-[20px]">${app.icon}</span></span>
       <span class="text-body-md font-bold text-on-surface truncate">${escapeHtml(app.label)}</span>
     </li>
     ${items
@@ -230,7 +238,9 @@ async function render() {
 
   const app = appOfRoute(route);
   renderSidebar(route, app);
-  closeMobileSidebar();
+  onHome = !app;
+  mobileSidebarOpen = false;
+  applySidebar();
 
   const title = routeLabel(route);
   pageTitle.innerHTML = app

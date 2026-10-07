@@ -916,6 +916,7 @@ async function seedQuoteDefaults() {
   await ensureDefaultSetting('quote_company_address', 'Calle 56 # 12C-02, Local 3, Barranquilla, Atlántico');
   await ensureDefaultSetting('quote_company_phone', '3225640747');
   await ensureDefaultSetting('quote_company_email', 'velarataller@gmail.com');
+  await ensureDefaultSetting('quote_company_web', '');
   await ensureDefaultSetting('quote_payment_details', '');
   await ensureDefaultSetting(
     'quote_terms',

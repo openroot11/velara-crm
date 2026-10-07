@@ -178,11 +178,18 @@ function reportCardHtml(data) {
 
   return `
     <div class="bg-surface rounded-xl overflow-hidden border border-outline-variant">
-      <div class="bg-primary text-on-primary px-5 py-4 flex items-center gap-3">
-        <span class="material-symbols-outlined text-[28px]">receipt_long</span>
-        <div class="min-w-0">
-          <p class="text-headline-sm font-headline-sm font-extrabold leading-tight">Informe Diario</p>
-          <p class="text-body-sm font-body-sm opacity-90 flex items-center gap-1 mt-0.5">
+      <!-- Encabezado de marca (sale en la imagen que se manda por WhatsApp):
+           negro carbón, logo oficial y franjas a 47,4° saliendo del borde. -->
+      <div class="relative overflow-hidden bg-[#0B0B0B] text-[#F2F0EA] px-5 py-4 flex items-center gap-4">
+        <svg class="absolute right-0 top-0 h-full w-[120px] pointer-events-none" viewBox="60 0 240 200" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+          <polygon points="20,0 80,0 264,200 204,200" fill="#252525"/>
+          <polygon points="100,0 160,0 344,200 284,200" fill="#1C1C1C"/>
+          <polygon points="180,0 210,0 394,200 364,200" fill="#D71920"/>
+        </svg>
+        <img src="/img/brand/logo-negativo.svg" alt="Velara" class="relative w-[120px] h-auto shrink-0" />
+        <div class="relative min-w-0 pl-4 border-l border-[#333]">
+          <p class="text-headline-sm font-headline-sm font-extrabold leading-tight">Informe diario</p>
+          <p class="text-body-sm font-body-sm text-[#A7A9AC] flex items-center gap-1 mt-0.5">
             <span class="material-symbols-outlined text-[14px]">calendar_today</span>${escapeHtml(formatDateDisplay(fecha))}
           </p>
         </div>

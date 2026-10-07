@@ -11,19 +11,16 @@
 const path = require('path');
 const fs = require('fs');
 const { getSetting } = require('./db');
+const brand = require('./pdfBrand');
 
 const UPLOAD_ROOT = path.join(__dirname, 'data', 'uploads');
-const LOGO_MARK_PATH = path.join(__dirname, '..', 'public', 'img', 'logo-mark.png');
-const INK = '#1B1B1B';
-const SMOKE = '#6E6E6E';
-const LINE = '#E2E0DB';
-const ACCENT = '#FF5A1F';
-const ACCENT_DEEP = '#C7420E';
-const BOX_BG = '#FAF9F7';
-const L = 50;
-const R = 562;
-const W = R - L;
-const BOTTOM = 742;
+// Colores, tipografía y márgenes de la marca (ver pdfBrand.js).
+const { C, F } = brand;
+const INK = C.ink;
+const SMOKE = C.smoke;
+const LINE = C.line;
+const ACCENT = C.red;
+const { L, R, W, BOTTOM } = brand.PAGE;
 
 const PRIORITY_LABEL = { baja: 'Baja', normal: 'Normal', alta: 'Alta', urgente: 'Urgente' };
 const TASK_LABEL = { pendiente: 'Pendiente', en_proceso: 'En proceso', completada: 'Completada', bloqueada: 'Bloqueada' };
@@ -49,59 +46,43 @@ function qty(n) {
 }
 
 async function companySettings() {
-  const [name, nit, address, phone, email, terms] = await Promise.all([
+  const [name, nit, address, phone, email, web, terms] = await Promise.all([
     getSetting('quote_company_name', 'Velara Taller S.A.S.'),
     getSetting('quote_company_nit', ''),
     getSetting('quote_company_address', ''),
     getSetting('quote_company_phone', ''),
     getSetting('quote_company_email', ''),
+    getSetting('quote_company_web', ''),
     getSetting('warranty_terms', DEFAULT_WARRANTY_TERMS),
   ]);
-  return { name, nit, address, phone, email, terms };
+  return { name, nit, address, phone, email, web, terms };
 }
 
-// Encabezado común + título + folio (filas [etiqueta, valor] a la derecha).
+// Encabezado de la papelería VELARA (logo, datos de la empresa, título con
+// filete rojo) + folio a la derecha: la primera fila de `meta` es el N.º y
+// el resto van como filas etiqueta/valor. También deja listo el pie de
+// marca en cada página (brand.setup).
 function header(doc, cfg, title, subtitle, meta) {
-  let textX = L;
-  if (fs.existsSync(LOGO_MARK_PATH)) {
-    try {
-      doc.image(LOGO_MARK_PATH, L, 40, { height: 46 });
-      textX = L + 56;
-    } catch {
-      /* sin logo */
-    }
-  }
-  doc.font('Times-Bold').fontSize(26).fillColor(INK).text('VELARA', textX, 45);
-  doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text('TALLER S.A.S.', textX, 74, { characterSpacing: 1.5 });
-  doc.moveTo(textX, 92).lineTo(textX + 40, 92).lineWidth(2).strokeColor(ACCENT).stroke();
-  const contact = [cfg.nit ? `NIT ${cfg.nit}` : '', cfg.address, [cfg.phone, cfg.email].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
-  doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text(contact, 300, 50, { width: 262, align: 'right' });
-  doc.moveTo(L, 122).lineTo(R, 122).lineWidth(1).strokeColor(LINE).stroke();
-
-  const top = 140;
-  doc.font('Times-Bold').fontSize(24).fillColor(INK).text(title, L, top, { width: 270 });
-  if (subtitle) doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text(subtitle, L, doc.y + 2, { width: 270 });
-  let my = top;
-  for (const [label, value] of meta) {
-    doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text(label, 330, my, { width: 110 });
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(value || '—', 330, my, { width: 232, align: 'right' });
-    my += 15;
-  }
-  return Math.max(doc.y, my) + 18;
+  brand.setup(doc, cfg);
+  brand.drawLetterhead(doc, cfg);
+  const titleBottom = brand.drawTitle(doc, title, 168, subtitle);
+  const [[, number], ...rows] = meta;
+  const metaBottom = brand.drawDocMeta(doc, 362, 132, number, rows);
+  return Math.max(titleBottom + 28, metaBottom + 14);
 }
 
 // Salto de página si no cabe `need` puntos más.
 function ensure(doc, y, need) {
   if (y + need <= BOTTOM) return y;
   doc.addPage();
-  return 60;
+  return 50;
 }
 
 function heading(doc, y, text) {
   y = ensure(doc, y, 40);
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(ACCENT_DEEP).text(text.toUpperCase(), L, y, { width: W, characterSpacing: 0.4 });
-  doc.moveTo(L, y + 12).lineTo(R, y + 12).lineWidth(0.5).strokeColor(LINE).stroke();
-  return y + 20;
+  doc.font(F.semibold).fontSize(7.5).fillColor(INK).text(text.toUpperCase(), L, y, { width: W, characterSpacing: 1.1 });
+  doc.moveTo(L, y + 13).lineTo(R, y + 13).lineWidth(0.5).strokeColor(LINE).stroke();
+  return y + 21;
 }
 
 // Filas etiqueta/valor en dos columnas.
@@ -110,13 +91,13 @@ function fieldGrid(doc, y, rows) {
   const clean = rows.filter(([, v]) => v !== undefined);
   for (let i = 0; i < clean.length; i += 2) {
     const pair = clean.slice(i, i + 2);
-    doc.font('Helvetica-Bold').fontSize(9);
+    doc.font(F.semibold).fontSize(9);
     const h = Math.max(...pair.map(([, v]) => doc.heightOfString(String(v || '—'), { width: colW })));
     y = ensure(doc, y, h + 22);
     pair.forEach(([label, value], j) => {
       const x = L + j * (colW + 20);
-      doc.font('Helvetica').fontSize(7.5).fillColor(SMOKE).text(label, x, y, { width: colW });
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(String(value || '—'), x, y + 10, { width: colW });
+      doc.font(F.regular).fontSize(7.5).fillColor(SMOKE).text(label, x, y, { width: colW });
+      doc.font(F.semibold).fontSize(9).fillColor(INK).text(String(value || '—'), x, y + 10, { width: colW });
     });
     y += 10 + h + 8;
   }
@@ -125,15 +106,15 @@ function fieldGrid(doc, y, rows) {
 
 function specsList(doc, y, specs) {
   if (!specs.length) {
-    doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text('Sin registrar.', L, y);
+    doc.font(F.regular).fontSize(9).fillColor(SMOKE).text('Sin registrar.', L, y);
     return y + 16;
   }
   for (const s of specs) {
-    doc.font('Helvetica').fontSize(9);
+    doc.font(F.regular).fontSize(9);
     const h = doc.heightOfString(s.value || '—', { width: W - 160 });
     y = ensure(doc, y, h + 8);
-    doc.font('Helvetica').fontSize(8.5).fillColor(SMOKE).text(s.label, L, y, { width: 150 });
-    doc.font('Helvetica').fontSize(9).fillColor(INK).text(s.value || '—', L + 160, y, { width: W - 160 });
+    doc.font(F.regular).fontSize(8.5).fillColor(SMOKE).text(s.label, L, y, { width: 150 });
+    doc.font(F.regular).fontSize(9).fillColor(INK).text(s.value || '—', L + 160, y, { width: W - 160 });
     y += h + 6;
   }
   return y + 4;
@@ -141,7 +122,7 @@ function specsList(doc, y, specs) {
 
 function paragraph(doc, y, text) {
   const t = text && String(text).trim() ? String(text) : 'Ninguna.';
-  doc.font('Helvetica').fontSize(9);
+  doc.font(F.regular).fontSize(9);
   const h = doc.heightOfString(t, { width: W });
   y = ensure(doc, y, h + 8);
   doc.fillColor(INK).text(t, L, y, { width: W });
@@ -150,30 +131,30 @@ function paragraph(doc, y, text) {
 
 function table(doc, y, cols, rows) {
   const drawHead = (yy) => {
-    doc.rect(L, yy, W, 16).fillColor(BOX_BG).fill();
+    doc.rect(L, yy, W, 18).fillColor(C.graphite).fill();
     let x = L + 4;
     for (const c of cols) {
-      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(SMOKE).text(c.label, x, yy + 5, { width: c.w - 8, align: c.align || 'left' });
+      doc.font(F.semibold).fontSize(7).fillColor('#FFFFFF').text(c.label, x, yy + 6, { width: c.w - 8, align: c.align || 'left', characterSpacing: 0.8 });
       x += c.w;
     }
-    return yy + 18;
+    return yy + 22;
   };
   y = ensure(doc, y, 40);
   y = drawHead(y);
   if (!rows.length) {
-    doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text('Sin registros.', L + 4, y + 2);
+    doc.font(F.regular).fontSize(9).fillColor(SMOKE).text('Sin registros.', L + 4, y + 2);
     return y + 20;
   }
   for (const r of rows) {
-    doc.font('Helvetica').fontSize(8.5);
+    doc.font(F.regular).fontSize(8.5);
     const h = Math.max(12, ...cols.map((c, i) => doc.heightOfString(String(r[i] ?? ''), { width: c.w - 8 })));
     if (y + h + 6 > BOTTOM) {
       doc.addPage();
-      y = drawHead(60);
+      y = drawHead(50);
     }
     let x = L + 4;
     cols.forEach((c, i) => {
-      doc.font(c.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8.5).fillColor(INK).text(String(r[i] ?? ''), x, y + 2, { width: c.w - 8, align: c.align || 'left' });
+      doc.font(c.bold ? F.semibold : F.regular).fontSize(8.5).fillColor(INK).text(String(r[i] ?? ''), x, y + 2, { width: c.w - 8, align: c.align || 'left' });
       x += c.w;
     });
     y += h + 6;
@@ -197,7 +178,7 @@ function signatures(doc, y, labels, images = []) {
       }
     }
     doc.moveTo(x, y + 50).lineTo(x + sw, y + 50).lineWidth(0.8).strokeColor(SMOKE).stroke();
-    doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text(label, x, y + 56, { width: sw, align: 'center' });
+    doc.font(F.regular).fontSize(8).fillColor(SMOKE).text(label, x, y + 56, { width: sw, align: 'center' });
   });
   return y + 80;
 }
@@ -317,7 +298,7 @@ function drawFabricacion(doc, op, cfg) {
   for (const c of checks) {
     y = ensure(doc, y, 18);
     doc.rect(L, y, 10, 10).lineWidth(0.8).strokeColor(SMOKE).stroke();
-    doc.font('Helvetica').fontSize(9).fillColor(INK).text(c, L + 18, y + 1);
+    doc.font(F.regular).fontSize(9).fillColor(INK).text(c, L + 18, y + 1);
     y += 16;
   }
   y = heading(doc, y + 6, 'Observaciones del taller');
@@ -345,17 +326,17 @@ function drawActa(doc, op, cfg) {
   ]);
   y = specsList(doc, y, op.specs.filter((s) => s.section === 'producto'));
   y = ensure(doc, y + 6, 80);
-  doc.rect(L, y, W, 60).fillColor(BOX_BG).fill();
+  doc.rect(L, y, W, 60).fillColor(C.paper).fill();
   doc.rect(L, y, 3, 60).fillColor(ACCENT).fill();
-  doc.font('Times-Bold').fontSize(16).fillColor(INK).text(`Garantía de ${op.warranty_months} ${op.warranty_months === 1 ? 'mes' : 'meses'}`, L + 18, y + 12);
-  doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text(`Vigente desde la entrega hasta el ${dmy(op.warranty_until)}.`, L + 18, y + 36);
+  doc.font(F.bold).fontSize(16).fillColor(INK).text(`Garantía de ${op.warranty_months} ${op.warranty_months === 1 ? 'mes' : 'meses'}`, L + 18, y + 12);
+  doc.font(F.regular).fontSize(9).fillColor(SMOKE).text(`Vigente desde la entrega hasta el ${dmy(op.warranty_until)}.`, L + 18, y + 36);
   y += 78;
   y = heading(doc, y, 'Condiciones de la garantía');
   for (const line of String(cfg.terms || '').split('\n').filter((l) => l.trim())) {
-    doc.font('Helvetica').fontSize(8.5);
+    doc.font(F.regular).fontSize(8.5);
     const h = doc.heightOfString(line.trim(), { width: W - 12 });
     y = ensure(doc, y, h + 6);
-    doc.circle(L + 3, y + 4, 1.5).fillColor(ACCENT).fill();
+    doc.circle(L + 3, y + 4.2, 1.2).fillColor(INK).fill();
     doc.fillColor(INK).text(line.trim(), L + 12, y, { width: W - 12 });
     y += h + 5;
   }

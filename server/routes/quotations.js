@@ -1,13 +1,10 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const { db, getSetting } = require('../db');
 const { broadcast } = require('../realtime');
 const nativeQuotes = require('../nativeQuotes');
 const velaraServices = require('../velaraServices');
-
-const LOGO_MARK_PATH = path.join(__dirname, '..', '..', 'public', 'img', 'logo-mark.png');
+const brand = require('../pdfBrand');
 
 const router = express.Router();
 
@@ -217,271 +214,151 @@ router.post('/:id/duplicate', async (req, res) => {
   res.status(201).json({ quotation: copy });
 });
 
-// Identidad visual de Velara Taller S.A.S. (ver Velara/notas/identidad-
-// visual.md -- fuente de verdad en Velara/sitio/tailwind.config.js). El
-// acento naranja se usa como acento nomás (títulos pequeños, la caja del
-// total, el botón de WhatsApp) -- nunca como color dominante de página,
-// misma regla que en el sitio.
-const INK = '#1B1B1B';
-const SMOKE = '#6E6E6E';
-const SMOKE_LINE = '#E2E0DB';
-const ACCENT = '#FF5A1F';
-const ACCENT_DEEP = '#C7420E';
-const ACCENT_PALE = '#FFE7DA';
-const BOX_BG = '#FAF9F7';
-
-const PAGE_L = 50;
-const PAGE_R = 562; // LETTER (612pt) - 50pt de margen a cada lado
-const CONTENT_W = PAGE_R - PAGE_L;
-
+// Datos de la empresa para el encabezado y el pie (editables en Ajustes ->
+// "Datos de la empresa (cotizaciones)"). Los usan también la factura y los
+// documentos de producción.
 async function quoteSettings() {
-  const [name, nit, address, phone, email, payment, terms] = await Promise.all([
+  const [name, nit, address, phone, email, web, payment, terms] = await Promise.all([
     getSetting('quote_company_name', 'Velara Taller S.A.S.'),
     getSetting('quote_company_nit', ''),
     getSetting('quote_company_address', ''),
     getSetting('quote_company_phone', ''),
     getSetting('quote_company_email', ''),
+    getSetting('quote_company_web', ''),
     getSetting('quote_payment_details', ''),
     getSetting('quote_terms', ''),
   ]);
-  return { name, nit, address, phone, email, payment, terms };
+  return { name, nit, address, phone, email, web, payment, terms };
 }
 
+// Condiciones que trae la hoja oficial; se usan si en Ajustes no hay ninguna.
+const DEFAULT_TERMS = [
+  'Los precios incluyen materiales, mano de obra e instalación.',
+  'Para iniciar la producción se requiere un anticipo del 50 % del valor total.',
+  'El 50 % restante se cancela contra entrega.',
+  'Cualquier cambio en el diseño o los materiales puede modificar el precio.',
+];
+
 // Dibuja la cotización completa sobre un PDFDocument ya creado (sin abrirlo
-// ni cerrarlo -- eso lo hace quien llama). Plantilla de Velara Taller S.A.S.
-// (ver Velara/notas/identidad-visual.md): wordmark + acento naranja arriba,
-// título editorial, ficha de cliente/servicio/notas en 3 columnas, tabla de
-// líneas, total resaltado en tono suave (nunca un bloque naranja sólido --
-// "el acento nunca domina"), condiciones y CTA de WhatsApp al pie. Aparte
-// del router para poder probarla desde un script suelto sin pasar por
-// HTTP/auth.
+// ni cerrarlo -- eso lo hace quien llama). Calca la hoja oficial de VELARA
+// (Velara/VELARA_IDENTIDAD_VISUAL/02_PAPELERIA/Cotizacion): encabezado con
+// logo y datos de la empresa, título con filete rojo, N.º y fechas a la
+// derecha, cliente y vehículo/proyecto en dos columnas, tabla con
+// encabezado grafito, total en bloque rojo, condiciones comerciales y pie
+// con las franjas de marca (ver server/pdfBrand.js). Aparte del router para
+// poder probarla desde un script suelto sin pasar por HTTP/auth.
 function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
+  const { C, F, PAGE } = brand;
   const service = quotation.service_slug ? velaraServices.findService(quotation.service_slug) : null;
 
-  // ---- encabezado: logo + wordmark + tagline -------------------------------
-  const TEXT_X = PAGE_L; // se corre a la derecha del logo solo si el logo cargó
-  let textX = TEXT_X;
-  if (fs.existsSync(LOGO_MARK_PATH)) {
-    try {
-      doc.image(LOGO_MARK_PATH, PAGE_L, 40, { height: 46 });
-      textX = PAGE_L + 56;
-    } catch {
-      /* si el logo no se puede leer, se sigue solo con el wordmark en texto */
+  brand.setup(doc, cfg);
+  brand.drawLetterhead(doc, cfg);
+
+  // ---- título + datos del documento ---------------------------------------
+  brand.drawTitle(doc, 'Cotización', 168);
+  brand.drawDocMeta(doc, 362, 132, quotation.number, [
+    ['Fecha de emisión', fmtDateDMY(quotation.date_order)],
+    ['Válida hasta', fmtDateDMY(quotation.validity_date)],
+    ['Asesor', advisor ? advisor.name : ''],
+  ]);
+
+  // ---- cliente (izq.) / vehículo o proyecto (der.) ------------------------
+  const top = 230;
+  const leftW = 247;
+  const rightX = 349;
+  const rightW = PAGE.R - rightX;
+
+  let y1 = brand.sectionHeading(doc, 'Datos del cliente', PAGE.L, top);
+  const clientName = lead ? lead.client_name : client ? client.name : '';
+  const clientDoc = (lead && lead.document) || (client && client.document);
+  const phone = (lead && lead.phone) || (client && client.phone);
+  const email = (lead && lead.email) || (client && client.email);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Nombre / razón social', clientName);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'NIT / C.C.', clientDoc);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Teléfono', brand.formatPhone(phone) || phone);
+  if (email) y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Correo', email);
+  const address = (lead && lead.address) || (client && client.address);
+  if (address) y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Dirección', address);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Ciudad', lead && lead.city);
+
+  let y2 = brand.sectionHeading(doc, 'Vehículo o proyecto', rightX, top, rightW);
+  y2 = brand.fieldRow(doc, rightX, y2, 92, rightW, 'Servicio', service ? service.title : lead ? lead.product : '');
+  if (service && quotation.service_fields) {
+    const f = quotation.service_fields;
+    // Marca / modelo / año van juntos en una fila, como en la hoja impresa.
+    const vehicle = ['marca', 'modelo', 'anio'].map((k) => f[k]).filter(Boolean).join(' / ');
+    if (vehicle) y2 = brand.fieldRow(doc, rightX, y2, 92, rightW, 'Marca / modelo / año', vehicle);
+    for (const field of service.fields) {
+      if (['marca', 'modelo', 'anio'].includes(field.key)) continue;
+      if (f[field.key]) y2 = brand.fieldRow(doc, rightX, y2, 92, rightW, field.label, f[field.key]);
     }
   }
-  doc.font('Times-Bold').fontSize(26).fillColor(INK).text('VELARA', textX, 45);
-  doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text('TALLER S.A.S.', textX, 74, { characterSpacing: 1.5 });
-  doc.moveTo(textX, 92).lineTo(textX + 40, 92).lineWidth(2).strokeColor(ACCENT).stroke();
-  doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text('TAPICERÍA QUE TE ACOMPAÑA', textX, 98, { characterSpacing: 1 });
+  if (advisor) y2 = brand.fieldRow(doc, rightX, y2, 92, rightW, 'Asesor comercial', advisor.name);
 
-  doc
-    .font('Helvetica')
-    .fontSize(8)
-    .fillColor(SMOKE)
-    .text('TAPICERÍA AUTOMOTRIZ Y DE MOTOS\nCARPAS Y FORROS A LA MEDIDA', 300, 55, { width: 262, align: 'right' });
+  // Filete vertical entre las dos columnas.
+  const colsBottom = Math.max(y1, y2);
+  doc.moveTo(320, top).lineTo(320, colsBottom - 7).lineWidth(0.6).strokeColor(C.line).stroke();
 
-  doc.moveTo(PAGE_L, 122).lineTo(PAGE_R, 122).lineWidth(1).strokeColor(SMOKE_LINE).stroke();
+  // ---- tabla de líneas ------------------------------------------------------
+  const cols = [
+    { key: 'item', label: 'Ítem', x: PAGE.L + 4, w: 30, align: 'center', muted: true },
+    { key: 'desc', label: 'Descripción', x: PAGE.L + 40, w: 238, bold: true },
+    { key: 'qty', label: 'Cant.', x: PAGE.L + 282, w: 58, align: 'right' },
+    { key: 'price', label: 'Valor unitario', x: PAGE.L + 346, w: 82, align: 'right' },
+    { key: 'total', label: 'Valor total', x: PAGE.L + 432, w: 83, align: 'right' },
+  ];
+  const rows = quotation.lines.map((l, i) => ({
+    item: String(i + 1),
+    desc: { text: l.product_name, sub: l.description || null },
+    qty: String(l.qty),
+    price:
+      l.discount_percent > 0
+        ? { text: money(l.price_unit), sub: `Descuento ${l.discount_percent} %`, subColor: C.red }
+        : money(l.price_unit),
+    total: money(l.subtotal),
+  }));
+  let y = brand.drawTable(doc, colsBottom + 6, cols, rows, { minRows: 3 });
 
-  // ---- título + folio -------------------------------------------------------
-  const blockTop = 145;
-  doc.font('Times-Bold').fontSize(28).fillColor(INK).text('Cotización', PAGE_L, blockTop);
-  doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text(`Gracias por confiar en ${cfg.name}`, PAGE_L, blockTop + 48);
-
-  const metaRow = (label, value, y) => {
-    doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text(label, 300, y, { width: 140 });
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(value || '—', 300, y, { width: 262, align: 'right' });
-  };
-  metaRow('N.º de cotización', quotation.number, blockTop);
-  metaRow('Fecha de emisión', fmtDateDMY(quotation.date_order), blockTop + 16);
-  metaRow('Válida hasta', fmtDateDMY(quotation.validity_date), blockTop + 32);
-
-  // ---- 3 columnas: cliente / servicio / notas -------------------------------
-  const colTop = blockTop + 65;
-  const colW = (CONTENT_W - 32) / 3;
-  const col1X = PAGE_L;
-  const col2X = PAGE_L + colW + 16;
-  const col3X = PAGE_L + (colW + 16) * 2;
-
-  function columnHeading(x, text) {
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(ACCENT_DEEP).text(text.toUpperCase(), x, colTop, { width: colW, characterSpacing: 0.4 });
-  }
-  function fieldRow(x, y, label, value) {
-    doc.font('Helvetica').fontSize(7.5).fillColor(SMOKE).text(label, x, y, { width: colW });
-    const text = value || '—';
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK);
-    const h = doc.heightOfString(text, { width: colW });
-    doc.text(text, x, y + 10, { width: colW });
-    return y + 10 + h + 8;
-  }
-
-  columnHeading(col1X, 'Datos del cliente');
-  let y1 = colTop + 16;
-  y1 = fieldRow(col1X, y1, 'Nombre', lead ? lead.client_name : client ? client.name : '—');
-  if ((lead && lead.document) || (client && client.document)) y1 = fieldRow(col1X, y1, 'Documento', (lead && lead.document) || client.document);
-  y1 = fieldRow(col1X, y1, 'Teléfono', (lead && lead.phone) || (client && client.phone));
-  const clientEmail = (lead && lead.email) || (client && client.email);
-  if (clientEmail) y1 = fieldRow(col1X, y1, 'Correo', clientEmail);
-  if (lead && lead.city) y1 = fieldRow(col1X, y1, 'Ciudad', lead.city);
-
-  columnHeading(col2X, service ? service.title : 'Detalles del servicio');
-  let y2 = colTop + 16;
-  if (service && quotation.service_fields && Object.keys(quotation.service_fields).length) {
-    for (const f of service.fields) {
-      const value = quotation.service_fields[f.key];
-      if (value) y2 = fieldRow(col2X, y2, f.label, value);
+  // ---- totales (der.) + datos de pago (izq., en el hueco de la plantilla) ---
+  const paymentLines = (cfg.payment || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  y = brand.ensureSpace(doc, y + 12, Math.max(70, 22 + paymentLines.length * 12));
+  const blockTop = y;
+  let yPay = blockTop;
+  if (paymentLines.length) {
+    yPay = brand.sectionHeading(doc, 'Datos de pago', PAGE.L, blockTop + 5, 270);
+    doc.font(F.regular).fontSize(8).fillColor(C.ink);
+    for (const line of paymentLines) {
+      doc.text(line, PAGE.L, yPay, { width: 270 });
+      yPay += doc.heightOfString(line, { width: 270 }) + 2;
     }
-  } else {
-    doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text('Sin detalles adicionales del servicio.', col2X, y2, { width: colW });
   }
+  y = brand.drawTotals(doc, blockTop, [
+    ['Subtotal', money(quotation.amount_untaxed)],
+    ['IVA (19 %)', money(quotation.amount_tax)],
+    ['Total', money(quotation.amount_total)],
+  ]);
+  y = Math.max(y, yPay) + 20;
 
-  columnHeading(col3X, 'Información adicional');
-  let y3 = colTop + 16;
-  y3 = fieldRow(col3X, y3, 'Servicio', service ? service.title : lead ? lead.product : '—');
+  // ---- observaciones (si hay) ----------------------------------------------
   const notes = quotation.note || (lead && lead.notes);
   if (notes) {
-    doc.font('Helvetica').fontSize(7.5).fillColor(SMOKE).text('Observaciones', col3X, y3, { width: colW });
-    doc.font('Helvetica').fontSize(8.5).fillColor(INK).text(notes, col3X, y3 + 10, { width: colW });
-    y3 += 10 + doc.heightOfString(notes, { width: colW }) + 10;
+    y = brand.ensureSpace(doc, y, 40);
+    y = brand.sectionHeading(doc, 'Observaciones', PAGE.L, y);
+    doc.font(F.regular).fontSize(8).fillColor(C.ink).text(notes, PAGE.L, y, { width: PAGE.W });
+    y += doc.heightOfString(notes, { width: PAGE.W }) + 14;
   }
 
-  // ---- tabla de lineas -------------------------------------------------------
-  const cols = {
-    desc: { x: PAGE_L + 5, w: 215 },
-    qty: { x: PAGE_L + 225, w: 60 },
-    price: { x: PAGE_L + 290, w: 95 },
-    tax: { x: PAGE_L + 390, w: 50 },
-    total: { x: PAGE_L + 445, w: 62 },
-  };
-  let y = Math.max(y1, y2, y3) + 12;
-  const tableHeader = () => {
-    doc.rect(PAGE_L, y, CONTENT_W, 20).fill(BOX_BG);
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(INK);
-    doc.text('DESCRIPCIÓN', cols.desc.x, y + 6, { width: cols.desc.w });
-    doc.text('CANTIDAD', cols.qty.x, y + 6, { width: cols.qty.w, align: 'right' });
-    doc.text('PRECIO UNITARIO', cols.price.x, y + 6, { width: cols.price.w, align: 'right' });
-    doc.text('IMPUESTOS', cols.tax.x, y + 6, { width: cols.tax.w, align: 'center' });
-    doc.text('IMPORTE', cols.total.x, y + 6, { width: cols.total.w, align: 'right' });
-    y += 20;
-  };
-  tableHeader();
+  // ---- condiciones comerciales --------------------------------------------
+  const terms = (cfg.terms || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const termLines = terms.length ? terms : DEFAULT_TERMS.slice();
+  if (quotation.validity_date) termLines.push(`Esta cotización es válida hasta el ${fmtDateDMY(quotation.validity_date)}.`);
+  y = brand.ensureSpace(doc, y, 50);
+  y = brand.sectionHeading(doc, 'Condiciones comerciales', PAGE.L, y);
+  y = brand.bulletList(doc, PAGE.L, y, PAGE.W, termLines);
 
-  quotation.lines.forEach((l) => {
-    const nameHeight = doc.font('Helvetica-Bold').fontSize(9).heightOfString(l.product_name, { width: cols.desc.w });
-    const descHeight = l.description ? doc.font('Helvetica').fontSize(8).heightOfString(l.description, { width: cols.desc.w }) + 3 : 0;
-    const rowH = Math.max(nameHeight + descHeight, 12) + 10;
-    if (y + rowH > 720) {
-      doc.addPage();
-      y = 50;
-      tableHeader();
-    }
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(l.product_name, cols.desc.x, y + 5, { width: cols.desc.w });
-    if (l.description) {
-      doc.font('Helvetica').fontSize(8).fillColor(SMOKE).text(l.description, cols.desc.x, y + 5 + nameHeight + 2, { width: cols.desc.w });
-    }
-    doc.font('Helvetica').fontSize(9).fillColor(INK).text(`${l.qty} Unidades`, cols.qty.x, y + 5, { width: cols.qty.w, align: 'right' });
-    doc.text(money(l.price_unit), cols.price.x, y + 5, { width: cols.price.w, align: 'right' });
-    if (l.discount_percent > 0) {
-      doc.fontSize(7).fillColor(ACCENT_DEEP).text(`− ${l.discount_percent}%`, cols.price.x, y + 16, { width: cols.price.w, align: 'right' });
-    }
-    doc.fontSize(9).fillColor(SMOKE).text('19%', cols.tax.x, y + 5, { width: cols.tax.w, align: 'center' });
-    doc.fillColor(INK).text(money(l.subtotal), cols.total.x, y + 5, { width: cols.total.w, align: 'right' });
-    y += rowH;
-    doc.moveTo(PAGE_L, y).lineTo(PAGE_R, y).lineWidth(0.5).strokeColor(SMOKE_LINE).stroke();
-  });
-
-  // ---- totales ----------------------------------------------------------------
-  y += 15;
-  if (y > 700) {
-    doc.addPage();
-    y = 50;
-  }
-  const totLabelX = PAGE_L + 300;
-  const totLabelW = 100;
-  const totValX = PAGE_L + 400;
-  const totValW = 112;
-  doc.font('Helvetica').fontSize(9).fillColor(SMOKE).text('Subtotal', totLabelX, y, { width: totLabelW });
-  doc.fillColor(INK).text(money(quotation.amount_untaxed), totValX, y, { width: totValW, align: 'right' });
-  y += 16;
-  doc.fillColor(SMOKE).text('IVA 19%', totLabelX, y, { width: totLabelW });
-  doc.fillColor(INK).text(money(quotation.amount_tax), totValX, y, { width: totValW, align: 'right' });
-  y += 18;
-  doc.rect(totLabelX - 10, y - 4, PAGE_R - (totLabelX - 10), 26).fill(ACCENT_PALE);
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(INK).text('Total', totLabelX, y + 4, { width: totLabelW });
-  doc.text(money(quotation.amount_total), totValX, y + 4, { width: totValW, align: 'right' });
-  y += 40;
-
-  // ---- condiciones y notas (izq.) + CTA de WhatsApp (der.) -------------------
-  const termLines = (cfg.terms || '').split('\n').filter(Boolean);
-  const halfW = (CONTENT_W - 24) / 2;
-  const ctaX = PAGE_L + halfW + 24;
-  const sectionTop = y;
-  if (termLines.length) {
-    if (sectionTop > 620) {
-      doc.addPage();
-      y = 50;
-    }
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(ACCENT_DEEP).text('CONDICIONES Y NOTAS', PAGE_L, y);
-    y += 14;
-    doc.font('Helvetica').fontSize(7.5).fillColor(SMOKE);
-    termLines.forEach((line) => {
-      const h = doc.heightOfString(`•  ${line}`, { width: halfW });
-      doc.text(`•  ${line}`, PAGE_L, y, { width: halfW });
-      y += h + 2;
-    });
-  }
-
-  if (cfg.phone) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(ACCENT_DEEP).text('¿LISTO PARA CONTINUAR?', ctaX, sectionTop, { width: halfW });
-    doc
-      .font('Helvetica')
-      .fontSize(8)
-      .fillColor(SMOKE)
-      .text('Para confirmar, resolver dudas o ajustar la cotización, escríbanos directamente por WhatsApp.', ctaX, sectionTop + 14, {
-        width: halfW,
-      });
-    const btnY = sectionTop + 48;
-    doc.roundedRect(ctaX, btnY, halfW, 26, 4).fill(ACCENT);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#FFFFFF').text(`Cotizar por WhatsApp   ${cfg.phone}`, ctaX, btnY + 8, { width: halfW, align: 'center' });
-    y = Math.max(y, btnY + 26 + 10);
-  }
-
-  // ---- datos de pago (caja clara), si hay algo puesto en Ajustes -------------
-  const paymentLines = (cfg.payment || '').split('\n').filter(Boolean);
-  if (paymentLines.length) {
-    y += 15;
-    const boxH = 18 + paymentLines.length * 13;
-    if (y + boxH > 730) {
-      doc.addPage();
-      y = 50;
-    }
-    doc.rect(PAGE_L, y, CONTENT_W, boxH).fill(BOX_BG);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text('DETALLES DE PAGO:', PAGE_L + 10, y + 8);
-    doc.font('Helvetica').fontSize(8).fillColor(SMOKE);
-    let py = y + 22;
-    paymentLines.forEach((line) => {
-      doc.text(line, PAGE_L + 10, py, { width: CONTENT_W - 20 });
-      py += 13;
-    });
-    y += boxH + 15;
-  }
-
-  // ---- pie de página: contacto + empresa -------------------------------------
-  let footerY = y + 20;
-  if (footerY > 700) {
-    doc.addPage();
-    footerY = 50;
-  }
-  doc.moveTo(PAGE_L, footerY).lineTo(PAGE_R, footerY).lineWidth(1.5).strokeColor(ACCENT).stroke();
-  doc
-    .font('Helvetica')
-    .fontSize(7.5)
-    .fillColor(SMOKE)
-    .text([cfg.phone, cfg.email, cfg.address].filter(Boolean).join('   ·   '), PAGE_L, footerY + 8, { width: CONTENT_W - 180 });
-  doc
-    .font('Helvetica-Bold')
-    .fontSize(7.5)
-    .fillColor(INK)
-    .text([cfg.name, cfg.nit ? `NIT. ${cfg.nit}` : null].filter(Boolean).join('   ·   '), PAGE_L, footerY + 8, { width: CONTENT_W, align: 'right' });
+  // ---- cierre -----------------------------------------------------------------
+  y = brand.ensureSpace(doc, y + 14, 11);
+  brand.thanksLine(doc, y);
 }
 
 router.get('/:id/pdf', async (req, res) => {
@@ -496,7 +373,11 @@ router.get('/:id/pdf', async (req, res) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${quotation.number || 'cotizacion'}.pdf"`);
 
-  const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+  const doc = new PDFDocument({
+    size: 'LETTER',
+    margin: 45,
+    info: { Title: `Cotizacion ${quotation.number || ''}`.trim(), Author: cfg.name },
+  });
   doc.pipe(res);
   drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg });
   doc.end();

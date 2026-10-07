@@ -4,13 +4,13 @@
 <meta charset="utf-8" />
 <meta content="width=device-width, initial-scale=1.0" name="viewport" />
 <title>Velara CRM</title>
-<link rel="icon" type="image/png" href="/img/favicon.png" />
-<link rel="apple-touch-icon" href="/img/favicon.png" />
+<link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
+<link rel="apple-touch-icon" href="/img/icon-1080.png" />
 <!-- Manifest + service worker: permiten "Instalar Velara CRM" desde el menu
      de Brave/Chrome (icono propio, ventana sin barra de navegador, anclable
      a la barra de tareas) en vez de un simple acceso directo a la pestaña. -->
 <link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#FF5A1F" />
+<meta name="theme-color" content="#0B0B0B" />
 <!-- Aplica el tema ANTES de pintar nada (localStorage -> preferencia del
      sistema -> claro) para no mostrar un parpadeo del tema equivocado.
      El resto de la lógica del interruptor vive en public/js/theme.js. -->
@@ -23,38 +23,43 @@
   })();
 </script>
 <style id="theme-vars">
-  /* Modo claro (por defecto). Los tokens "fixed" de Material 3 no viven
+  /* Paleta del manual de marca VELARA (Velara/VELARA_IDENTIDAD_VISUAL/
+     06_MANUAL_DE_MARCA, sección 03): negro carbón #0B0B0B, grafito
+     #252525, blanco roto #F2F0EA, plata metálico #A7A9AC y un solo acento,
+     el rojo deportivo #D71920. Regla del sitio: el rojo es acento (botón
+     principal, filetes, el total), nunca el color dominante.
+     Modo claro (por defecto). Los tokens "fixed" de Material 3 no viven
      aquí -- por definición no cambian entre claro/oscuro (ver tailwind-config). */
   :root {
     --c-surface: #ffffff;
     --c-surface-container-lowest: #ffffff;
-    --c-surface-container-low: #FAF9F7;
-    --c-surface-container: #F3F2EF;
-    --c-surface-container-high: #E7E5E0;
-    --c-surface-container-highest: #DCD9D2;
-    --c-surface-variant: #E7E5E0;
-    --c-surface-dim: #E7E5E0;
+    --c-surface-container-low: #F8F7F3;
+    --c-surface-container: #F2F0EA;
+    --c-surface-container-high: #E9E6DE;
+    --c-surface-container-highest: #DDD9CF;
+    --c-surface-variant: #E9E6DE;
+    --c-surface-dim: #E9E6DE;
     --c-surface-bright: #ffffff;
-    --c-background: #FAF9F7;
-    --c-on-surface: #1B1B1B;
-    --c-on-surface-variant: #6E6E6E;
-    --c-on-background: #1B1B1B;
-    --c-outline: #9C9690;
+    --c-background: #F8F7F3;
+    --c-on-surface: #0B0B0B;
+    --c-on-surface-variant: #5E6064;
+    --c-on-background: #0B0B0B;
+    --c-outline: #8E9094;
     --c-outline-variant: #E2E0DB;
-    --c-inverse-surface: #2A2A2A;
-    --c-inverse-on-surface: #F3F2EF;
+    --c-inverse-surface: #252525;
+    --c-inverse-on-surface: #F2F0EA;
 
-    --c-primary: #FF5A1F;
+    --c-primary: #D71920;
     --c-on-primary: #ffffff;
-    --c-primary-container: #FFE7DA;
-    --c-on-primary-container: #7A2A10;
-    --c-inverse-primary: #FF8F5E;
-    --c-surface-tint: #C7420E;
-    /* Hover del boton principal: el naranja profundo de marca (accent.deep). */
-    --c-primary-hover: #C7420E;
-    /* Relleno de checkbox/radio marcados: neutro (el naranja es solo para
-       logo y boton principal). */
-    --c-check: #1B1B1B;
+    --c-primary-container: #FBE3E4;
+    --c-on-primary-container: #7F0E12;
+    --c-inverse-primary: #F0565B;
+    --c-surface-tint: #B3141A;
+    /* Hover del boton principal: rojo profundo de marca (accent.deep). */
+    --c-primary-hover: #B3141A;
+    /* Relleno de checkbox/radio marcados: neutro (el rojo es solo para
+       logo, boton principal y filetes). */
+    --c-check: #0B0B0B;
 
     --c-secondary: #2a78d6;
     --c-on-secondary: #ffffff;
@@ -66,49 +71,51 @@
     --c-tertiary-container: #F5E1B8;
     --c-on-tertiary-container: #4A3400;
 
-    --c-error: #d03b3b;
+    /* Error en carmesí, un paso más oscuro que el rojo de marca para que una
+       alerta no se confunda con el botón principal. */
+    --c-error: #B42318;
     --c-on-error: #ffffff;
-    --c-error-container: #fbdad8;
-    --c-on-error-container: #7a1410;
+    --c-error-container: #FDE4E1;
+    --c-on-error-container: #7A1410;
 
     --c-status-good: #0ca30c;
     --c-status-warning: #fab219;
     --c-status-serious: #B8791A;
-    --c-status-critical: #d03b3b;
+    --c-status-critical: #B42318;
   }
 
-  /* Modo oscuro: superficies "ink" casi negras, texto casi blanco, y los
-     colores de acento pasados a su variante mas clara (misma logica que
-     usa Material 3: en oscuro, "primary" es el tono claro, "on-primary" el
-     oscuro -- al revés que en claro) para que sigan siendo legibles sobre
-     fondo oscuro sin quemar la vista. */
-  :root.dark {
-    --c-surface: #1B1B1B;
-    --c-surface-container-lowest: #121212;
-    --c-surface-container-low: #201F1D;
-    --c-surface-container: #262421;
-    --c-surface-container-high: #2E2B27;
-    --c-surface-container-highest: #383430;
-    --c-surface-variant: #383430;
-    --c-surface-dim: #121212;
-    --c-surface-bright: #3A3733;
-    --c-background: #121212;
-    --c-on-surface: #F3F2EF;
-    --c-on-surface-variant: #B8B2A8;
-    --c-on-background: #F3F2EF;
-    --c-outline: #8B857C;
-    --c-outline-variant: #48433C;
-    --c-inverse-surface: #F3F2EF;
-    --c-inverse-on-surface: #1B1B1B;
+  /* Modo oscuro: superficies en negro carbón y grafito, texto en blanco
+     roto, plata para lo secundario. El rojo se mantiene rojo (el manual
+     pide que la pieza roja no cambie) con un tono apenas más vivo para que
+     se lea sobre negro. */
+  :root.dark,
+  .theme-ink {
+    --c-surface: #141414;
+    --c-surface-container-lowest: #0F0F0F;
+    --c-surface-container-low: #1B1B1B;
+    --c-surface-container: #212121;
+    --c-surface-container-high: #292929;
+    --c-surface-container-highest: #333333;
+    --c-surface-variant: #333333;
+    --c-surface-dim: #0B0B0B;
+    --c-surface-bright: #3A3A3A;
+    --c-background: #0B0B0B;
+    --c-on-surface: #F2F0EA;
+    --c-on-surface-variant: #A7A9AC;
+    --c-on-background: #F2F0EA;
+    --c-outline: #77797D;
+    --c-outline-variant: #2E2E2E;
+    --c-inverse-surface: #F2F0EA;
+    --c-inverse-on-surface: #0B0B0B;
 
-    --c-primary: #FF8F5E;
-    --c-on-primary: #3A1200;
-    --c-primary-container: #7A2A10;
-    --c-on-primary-container: #FFE7DA;
-    --c-inverse-primary: #FF5A1F;
-    --c-surface-tint: #FF8F5E;
-    --c-primary-hover: #FFAA85;
-    --c-check: #8B857C;
+    --c-primary: #E3212A;
+    --c-on-primary: #ffffff;
+    --c-primary-container: #4A0F12;
+    --c-on-primary-container: #FBE3E4;
+    --c-inverse-primary: #D71920;
+    --c-surface-tint: #F0565B;
+    --c-primary-hover: #C41A21;
+    --c-check: #A7A9AC;
 
     --c-secondary: #8AC0F5;
     --c-on-secondary: #062347;
@@ -120,15 +127,29 @@
     --c-tertiary-container: #6B4D00;
     --c-on-tertiary-container: #F5E1B8;
 
-    --c-error: #FFB4AB;
-    --c-on-error: #690005;
-    --c-error-container: #93000A;
+    --c-error: #FF8A80;
+    --c-on-error: #3B0A06;
+    --c-error-container: #7A1410;
     --c-on-error-container: #FFDAD6;
 
     --c-status-good: #22C55E;
     --c-status-warning: #FFC94D;
     --c-status-serious: #E0A83D;
     --c-status-critical: #FF6E6E;
+  }
+
+  /* El menú lateral va siempre en negro carbón, como el encabezado y el pie
+     del sitio web (.theme-ink arriba). En modo oscuro se separa del fondo
+     con un tono un poco más claro. */
+  #sidebar.theme-ink {
+    --c-surface: #0B0B0B;
+    --c-surface-container-low: #181818;
+    --c-surface-container-high: #222222;
+    --c-outline-variant: #222222;
+    color: var(--c-on-surface);
+  }
+  :root.dark #sidebar.theme-ink {
+    --c-surface: #111111;
   }
 </style>
 <script>
@@ -139,9 +160,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<!-- Fraunces (titulos, editorial) + Manrope (UI/texto) -- misma pareja
-     tipografica que Velara/sitio (ver Velara/notas/identidad-visual.md). -->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<!-- Inter: tipografía secundaria del manual de marca VELARA (títulos, textos
+     e interfaz). La de "VELARA" es propia del logo y nunca se escribe. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.14.0/dist/chartjs-chart-sankey.min.js"></script>
@@ -152,8 +173,8 @@
     theme: {
       extend: {
         colors: {
-          // Paleta de marca VELARA Taller S.A.S. (ver Velara/notas/identidad-
-          // visual.md). Todos los tokens que deben verse distinto en modo
+          // Paleta de marca VELARA Taller S.A.S. (manual de marca, ver
+          // #theme-vars). Todos los tokens que deben verse distinto en modo
           // oscuro apuntan a una variable CSS (definida mas abajo en
           // #theme-vars, :root vs .dark) en vez de un hex fijo -- asi el
           // interruptor de tema (ver public/js/theme.js) no necesita tocar
@@ -169,7 +190,7 @@
           outline: 'var(--c-outline)',
           'error-container': 'var(--c-error-container)',
           error: 'var(--c-error)',
-          'primary-fixed': '#FFE7DA',
+          'primary-fixed': '#FBE3E4',
           'on-primary': 'var(--c-on-primary)',
           'tertiary-fixed': '#F5E1B8',
           'surface-container-lowest': 'var(--c-surface-container-lowest)',
@@ -182,7 +203,7 @@
           'inverse-surface': 'var(--c-inverse-surface)',
           'on-tertiary-fixed-variant': '#6B4D00',
           'on-secondary-fixed': '#062347',
-          'on-primary-fixed-variant': '#7A2A10',
+          'on-primary-fixed-variant': '#7F0E12',
           'on-secondary': 'var(--c-on-secondary)',
           'secondary-fixed': '#dbe9fb',
           surface: 'var(--c-surface)',
@@ -203,13 +224,13 @@
           'primary-container': 'var(--c-primary-container)',
           'outline-variant': 'var(--c-outline-variant)',
           'inverse-on-surface': 'var(--c-inverse-on-surface)',
-          'primary-fixed-dim': '#FF8F5E',
+          'primary-fixed-dim': '#F0565B',
           background: 'var(--c-background)',
           'surface-container-highest': 'var(--c-surface-container-highest)',
           primary: 'var(--c-primary)',
           'primary-hover': 'var(--c-primary-hover)',
           'surface-container': 'var(--c-surface-container)',
-          'on-primary-fixed': '#3A1200',
+          'on-primary-fixed': '#3D0507',
           // Escala de estado fija (buena/advertencia/grave/critica) para
           // badges de SLA, acciones prioritarias y tablero Kanban -- no se
           // usa para series de graficas (esas usan la paleta categorica ya
@@ -233,33 +254,27 @@
           'margin-mobile': '16px',
         },
         fontFamily: {
-          // Fraunces (serif editorial) para titulos -- mismo gesto que
-          // Velara/sitio: titulo grande, con caracter. Manrope para todo lo
-          // demas (UI, cuerpo, tablas) -- Fraunces a tamano chico se ve mal.
-          'headline-lg': ['Fraunces', 'Georgia', 'serif'],
-          'headline-md': ['Fraunces', 'Georgia', 'serif'],
-          'headline-sm': ['Fraunces', 'Georgia', 'serif'],
-          'body-sm': ['Manrope', 'system-ui', 'sans-serif'],
-          'label-bold': ['Manrope', 'system-ui', 'sans-serif'],
-          'body-md': ['Manrope', 'system-ui', 'sans-serif'],
-          'display-kpi': ['Fraunces', 'Georgia', 'serif'],
-          // Completan la escala pedida en la Fase 2 (display/h1/h2/h3/body/
-          // body-sm/label/caption): headline-lg/md/sm ya cubren h1/h2/h3,
-          // body-md/body-sm ya cubren body/body-sm, display-kpi ya cubre
-          // display -- solo faltaban estos dos. No se renombran los tokens
-          // existentes (los usan ~200 sitios en las vistas) para no romper
-          // nada sin necesidad.
-          label: ['Manrope', 'system-ui', 'sans-serif'],
-          caption: ['Manrope', 'system-ui', 'sans-serif'],
+          // Inter en todo, como pide el manual de marca (títulos, textos e
+          // interfaz). Se conservan los nombres de token que ya usan las
+          // vistas (~200 sitios) para no tocarlas.
+          'headline-lg': ['Inter', 'system-ui', 'sans-serif'],
+          'headline-md': ['Inter', 'system-ui', 'sans-serif'],
+          'headline-sm': ['Inter', 'system-ui', 'sans-serif'],
+          'body-sm': ['Inter', 'system-ui', 'sans-serif'],
+          'label-bold': ['Inter', 'system-ui', 'sans-serif'],
+          'body-md': ['Inter', 'system-ui', 'sans-serif'],
+          'display-kpi': ['Inter', 'system-ui', 'sans-serif'],
+          label: ['Inter', 'system-ui', 'sans-serif'],
+          caption: ['Inter', 'system-ui', 'sans-serif'],
         },
         fontSize: {
-          'headline-lg': ['30px', { lineHeight: '38px', fontWeight: '600' }],
-          'headline-md': ['24px', { lineHeight: '32px', fontWeight: '600' }],
-          'headline-sm': ['20px', { lineHeight: '28px', fontWeight: '700' }],
+          'headline-lg': ['30px', { lineHeight: '38px', letterSpacing: '-0.02em', fontWeight: '700' }],
+          'headline-md': ['24px', { lineHeight: '32px', letterSpacing: '-0.015em', fontWeight: '700' }],
+          'headline-sm': ['20px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '700' }],
           'body-sm': ['12px', { lineHeight: '16px', fontWeight: '400' }],
           'label-bold': ['11px', { lineHeight: '12px', letterSpacing: '0.05em', fontWeight: '700' }],
           'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }],
-          'display-kpi': ['48px', { lineHeight: '56px', letterSpacing: '-0.02em', fontWeight: '700' }],
+          'display-kpi': ['48px', { lineHeight: '56px', letterSpacing: '-0.03em', fontWeight: '700' }],
           // "label" = misma metrica que label-bold (mismo uso: eyebrows y
           // encabezados de columna en mayuscula) pero peso medio en vez de
           // negrita, para cuando la negrita compite demasiado con el resto.
@@ -336,9 +351,14 @@
   }
 
   @layer components {
+    /* Gesto firma de la marca: filete rojo corto bajo un título. */
+    .rule-under { display: block; width: 2.5rem; height: 3px; background: var(--c-primary); }
+    /* Versalitas espaciadas (encabezados de sección, como la papelería). */
+    .overline { font-size: 11px; line-height: 1; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+
     .btn {
-      @apply relative inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-             text-label-bold font-label-bold whitespace-nowrap select-none
+      @apply relative inline-flex items-center justify-center gap-2 rounded-[9999px] px-[18px] py-2
+             text-[12.5px] leading-[16px] font-semibold tracking-[0.01em] font-label-bold whitespace-nowrap select-none
              transition-colors duration-150 ease-out
              disabled:opacity-45 disabled:cursor-not-allowed disabled:pointer-events-none
              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-outline focus-visible:ring-offset-2 focus-visible:ring-offset-surface;
@@ -416,21 +436,27 @@
 <body class="bg-background font-body-md text-on-background min-h-screen flex">
 
 <!-- Sidebar -->
-<nav id="sidebar" aria-label="Menú principal" class="fixed left-0 top-0 h-screen w-[252px] max-w-[85vw] bg-surface border-r border-outline-variant flex flex-col z-40 transition-transform duration-200 ease-in-out">
-  <div class="p-5 flex items-center gap-3">
-    <!-- Marca VELARA: logo real del diseñador (cabeza felina de perfil),
-         ver logo.png / logo-mark.png (recorte solo del ícono) en public/img/. -->
-    <img src="/img/logo-mark.png" alt="Velara" class="h-9 w-auto shrink-0" />
-    <div class="min-w-0">
-      <h1 class="text-headline-sm font-headline-sm font-extrabold text-on-surface leading-tight truncate">Velara CRM</h1>
-      <p class="text-body-sm font-body-sm text-on-surface-variant truncate">Comercial y producción</p>
-    </div>
+<nav id="sidebar" aria-label="Menú principal" class="theme-ink fixed left-0 top-0 h-screen w-[252px] max-w-[85vw] bg-surface border-r border-outline-variant flex flex-col z-40 transition-transform duration-200 ease-in-out overflow-hidden">
+  <div class="relative px-6 pt-6 pb-5">
+    <!-- Logo oficial VELARA (versión negativa, sobre negro carbón). El
+         manual pide mínimo 120 px de ancho en pantalla. -->
+    <a href="#/inicio" class="block" aria-label="Velara, ir a Inicio">
+      <img src="/img/brand/logo-negativo.svg" alt="Velara" class="w-[150px] h-auto" />
+    </a>
+    <p class="overline text-on-surface-variant mt-3 !text-[10px]">CRM · Comercial y producción</p>
   </div>
   <ul id="nav-list" class="flex-1 overflow-y-auto py-2 px-3 space-y-0.5">
     <!-- Lo llena app.js desde apps.js: en Inicio lista las aplicaciones; dentro
          de una aplicación, solo sus pantallas (como Odoo). -->
   </ul>
-  <div class="p-5 border-t border-outline-variant flex items-center gap-3">
+  <!-- Franjas de marca a 47,4° (plata, plata clara, roja), saliendo del
+       borde superior, como en la papelería. Decorativas. -->
+  <svg class="absolute right-0 top-0 w-[92px] h-[60px] pointer-events-none" viewBox="60 0 240 160" preserveAspectRatio="xMaxYMin slice" aria-hidden="true">
+    <polygon points="20,0 80,0 264,200 204,200" fill="#252525"/>
+    <polygon points="100,0 160,0 344,200 284,200" fill="#1C1C1C"/>
+    <polygon points="180,0 210,0 394,200 364,200" fill="#D71920"/>
+  </svg>
+  <div class="relative p-5 border-t border-outline-variant flex items-center gap-3">
     <div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-on-surface-variant shrink-0">A</div>
     <div class="min-w-0">
       <p class="text-label-bold font-label-bold truncate">Admin User</p>
@@ -460,6 +486,9 @@
         <span id="theme-toggle-icon" class="material-symbols-outlined text-[20px]">dark_mode</span>
       </button>
       <span id="conn-dot" class="w-2 h-2 rounded-full bg-outline-variant ml-1" title="Conectando…"></span>
+      <!-- Usuario y cerrar sesión: en Inicio no hay menú lateral, así que
+           van aquí (app.js lo muestra solo en Inicio). -->
+      <div id="topbar-user" class="hidden items-center gap-2 pl-3 border-l border-outline-variant"></div>
     </div>
   </header>
   <main id="view-root" class="flex-1 min-w-0 p-margin-mobile sm:p-margin-desktop"></main>

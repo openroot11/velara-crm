@@ -139,9 +139,13 @@ export async function mount(container, ctx) {
               <label class="block text-label-bold font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Teléfono</label>
               <input id="qs-company-phone" type="text" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
             </div>
-            <div class="md:col-span-2">
+            <div>
               <label class="block text-label-bold font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Correo</label>
               <input id="qs-company-email" type="text" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
+            </div>
+            <div>
+              <label class="block text-label-bold font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Sitio web</label>
+              <input id="qs-company-web" type="text" placeholder="velara.com.co" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
             </div>
             <div class="md:col-span-2">
               <label class="block text-label-bold font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Datos de pago (una línea por dato)</label>
@@ -264,6 +268,7 @@ export async function mount(container, ctx) {
     container.querySelector('#qs-company-address').value = settings.quote_company_address || '';
     container.querySelector('#qs-company-phone').value = settings.quote_company_phone || '';
     container.querySelector('#qs-company-email').value = settings.quote_company_email || '';
+    container.querySelector('#qs-company-web').value = settings.quote_company_web || '';
     container.querySelector('#qs-company-payment').value = settings.quote_payment_details || '';
     container.querySelector('#qs-company-terms').value = settings.quote_terms || '';
   }
@@ -277,6 +282,7 @@ export async function mount(container, ctx) {
         quote_company_address: container.querySelector('#qs-company-address').value.trim(),
         quote_company_phone: container.querySelector('#qs-company-phone').value.trim(),
         quote_company_email: container.querySelector('#qs-company-email').value.trim(),
+        quote_company_web: container.querySelector('#qs-company-web').value.trim(),
         quote_payment_details: container.querySelector('#qs-company-payment').value,
         quote_terms: container.querySelector('#qs-company-terms').value,
       });

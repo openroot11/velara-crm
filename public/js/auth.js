@@ -7,13 +7,22 @@
 function renderOverlay(firstRun, onSuccess) {
   const overlay = document.createElement('div');
   overlay.id = 'auth-overlay';
-  overlay.className = 'fixed inset-0 z-[200] bg-background flex items-center justify-center p-4';
+  overlay.className = 'fixed inset-0 z-[200] bg-[#0B0B0B] flex items-center justify-center p-4 overflow-hidden';
   overlay.innerHTML = `
-    <div class="w-full max-w-sm bg-surface rounded-xl shadow-xl border border-outline-variant p-8">
-      <div class="flex flex-col items-center mb-6">
-        <img src="/img/logo-mark.png" alt="Velara" class="h-14 w-auto mb-3" />
-        <h1 class="text-headline-md font-headline-md font-extrabold text-on-surface text-center">Velara CRM</h1>
-        <p class="text-body-sm font-body-sm text-on-surface-variant text-center mt-1">
+    <!-- Patrón de marca (planos a 47,4° y una línea roja), saliendo de los bordes. -->
+    <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <polygon points="-200,0 260,0 1088,900 628,900" fill="#141414"/>
+      <polygon points="420,0 560,0 1388,900 1248,900" fill="#1A1A1A"/>
+      <polygon points="1180,0 1600,0 1600,456" fill="#121212"/>
+      <polygon points="1300,0 1340,0 1600,283 1600,326" fill="#D71920"/>
+    </svg>
+    <div class="relative w-full max-w-sm bg-surface rounded-xl shadow-2xl p-8">
+      <div class="flex flex-col items-center mb-7">
+        <img src="/img/brand/logo-eslogan-positivo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto dark:hidden" />
+        <img src="/img/brand/logo-eslogan-negativo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto hidden dark:block" />
+        <h1 class="overline text-on-surface-variant text-center mt-6">CRM · Comercial y producción</h1>
+        <span class="rule-under mt-3"></span>
+        <p class="text-body-sm font-body-sm text-on-surface-variant text-center mt-4">
           ${firstRun ? 'Crea la primera cuenta de administrador para iniciar el control de ventas.' : 'Ingresa con tu usuario para acceder al sistema.'}
         </p>
       </div>

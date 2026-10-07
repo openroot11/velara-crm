@@ -17,6 +17,7 @@ const PUBLIC_KEYS = [
   'quote_company_address',
   'quote_company_phone',
   'quote_company_email',
+  'quote_company_web',
   'quote_payment_details',
   'quote_terms',
 ];

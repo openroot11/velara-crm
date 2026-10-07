@@ -6,6 +6,8 @@ const { broadcast } = require('../realtime');
 const { requireRole } = require('../middleware/auth');
 const erp = require('../erp');
 const einvoice = require('../einvoice');
+const brand = require('../pdfBrand');
+const { quoteSettings } = require('./quotations');
 
 // Facturación electrónica (ERP): lo que Velara factura a sus clientes
 // (emitidas = ventas) y lo que le facturan sus proveedores (recibidas =
@@ -493,84 +495,141 @@ router.get('/export/xlsx', async (req, res) => {
 
 const money = (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(n) || 0);
 
-// Representación gráfica (PDF) de la factura.
+// 2026-10-06 -> 06-10-2026, mismo formato que la cotización.
+const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('-') : iso);
+
+const PAYMENT_LABEL = { pendiente: 'Pendiente', pagada: 'Pagada', parcial: 'Pago parcial', vencida: 'Vencida' };
+
+// Representación gráfica (PDF) de la factura, sobre la hoja oficial de VELARA
+// (Velara/VELARA_IDENTIDAD_VISUAL/02_PAPELERIA/Factura): encabezado de marca,
+// título con filete rojo, N.º con línea roja, adquiriente y emisor en dos
+// columnas, tabla con encabezado grafito, "Total a pagar" en bloque rojo,
+// CUFE al lado de los totales y firmas al pie. Ver server/pdfBrand.js.
+function drawInvoicePdf(doc, { inv, issuer, cfg }) {
+  const { C, F, PAGE } = brand;
+  const isSale = inv.direction === 'emitida';
+  const issuerNit = `${issuer.nit}-${einvoice.nitDv(issuer.nit)}`;
+  const seller = isSale
+    ? { name: issuer.name, nit: issuerNit, address: cfg.address, phone: brand.formatPhone(cfg.phone), email: cfg.email }
+    : { name: inv.party_name, nit: inv.party_nit };
+  const buyer = isSale
+    ? { name: inv.party_name, nit: inv.party_nit, address: inv.party_address, email: inv.party_email }
+    : { name: issuer.name, nit: issuerNit, address: cfg.address, email: cfg.email };
+
+  brand.setup(doc, cfg);
+
+  if (inv.source === 'simulado') {
+    doc.save().rotate(-30, { origin: [306, 420] });
+    doc.font(F.bold).fontSize(64).fillColor('#ECEAE4').text('SIMULACIÓN', 40, 385, { width: 532, align: 'center', lineBreak: false });
+    doc.restore();
+  }
+
+  brand.drawLetterhead(doc, cfg);
+
+  const isCredit = inv.doc_type === 'nota_credito';
+  const title = isCredit ? 'Nota crédito' : 'Factura';
+  const subtitle = !isSale ? 'Recibida de proveedor' : isCredit ? 'Electrónica' : 'Electrónica de venta';
+  brand.drawTitle(doc, title, 162, subtitle);
+  const meta = [
+    ['Fecha de emisión', dmy(inv.issue_date)],
+    ['Fecha de vencimiento', dmy(inv.due_date)],
+  ];
+  if (inv.related_number) meta.push(['Referencia', `Factura ${inv.related_number}`]);
+  if (inv.payment_status) meta.push(['Estado de pago', PAYMENT_LABEL[inv.payment_status] || inv.payment_status]);
+  brand.drawDocMeta(doc, 362, 120, inv.number, meta, { redLine: true });
+
+  // ---- adquiriente (izq.) / emisor (der.) ----------------------------------
+  const top = 236;
+  const leftW = 247;
+  const rightX = 349;
+  const rightW = PAGE.R - rightX;
+  let y1 = brand.sectionHeading(doc, 'Adquiriente', PAGE.L, top);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Nombre / razón social', buyer.name);
+  y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'NIT / C.C.', buyer.nit);
+  if (buyer.email) y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Correo', buyer.email);
+  if (buyer.address) y1 = brand.fieldRow(doc, PAGE.L, y1, 92, leftW, 'Dirección', buyer.address);
+
+  let y2 = brand.sectionHeading(doc, 'Emisor', rightX, top, rightW);
+  doc.font(F.regular).fontSize(8.5).fillColor(C.ink);
+  for (const line of [seller.name, seller.nit ? `NIT ${seller.nit}` : null, seller.address, seller.phone, seller.email].filter(Boolean)) {
+    doc.text(line, rightX, y2, { width: rightW });
+    y2 += doc.heightOfString(line, { width: rightW }) + 4;
+  }
+  const colsBottom = Math.max(y1, y2 + 6);
+  doc.moveTo(320, top).lineTo(320, colsBottom - 7).lineWidth(0.6).strokeColor(C.line).stroke();
+
+  // ---- líneas ----------------------------------------------------------------
+  const cols = [
+    { key: 'item', label: 'Ítem', x: PAGE.L + 4, w: 30, align: 'center', muted: true },
+    { key: 'desc', label: 'Descripción', x: PAGE.L + 40, w: 205 },
+    { key: 'qty', label: 'Cant.', x: PAGE.L + 249, w: 44, align: 'right' },
+    { key: 'price', label: 'Valor unitario', x: PAGE.L + 297, w: 80, align: 'right' },
+    { key: 'iva', label: 'IVA', x: PAGE.L + 381, w: 40, align: 'right' },
+    { key: 'total', label: 'Valor total', x: PAGE.L + 425, w: 90, align: 'right' },
+  ];
+  const rows = inv.lines.map((l, i) => ({
+    item: String(i + 1),
+    desc: l.description,
+    qty: String(l.qty),
+    price: money(l.unit_price),
+    iva: `${l.iva_rate} %`,
+    total: money(l.subtotal),
+  }));
+  let y = brand.drawTable(doc, colsBottom + 6, cols, rows, { minRows: 3 });
+
+  // ---- CUFE (izq.) + totales (der.) -----------------------------------------
+  y = brand.ensureSpace(doc, y + 12, 80);
+  const blockTop = y;
+  const legal =
+    inv.source === 'simulado'
+      ? 'Documento SIMULADO generado por Velara CRM para pruebas. No fue enviado a la DIAN y no tiene validez fiscal.'
+      : `Representación gráfica de la factura electrónica. Proveedor tecnológico: ${inv.source}.`;
+  doc.font(F.semibold).fontSize(7.5).fillColor(C.ink).text(isCredit ? 'CUDE' : 'CUFE', PAGE.L, blockTop + 5, { characterSpacing: 1.1 });
+  doc.font(F.regular).fontSize(7).fillColor(C.smoke).text(inv.cufe || '—', PAGE.L, blockTop + 18, { width: 270 });
+  let yLeft = blockTop + 18 + doc.heightOfString(inv.cufe || '—', { width: 270 }) + 6;
+  doc.font(F.regular).fontSize(7.5).fillColor(C.ink).text(legal, PAGE.L, yLeft, { width: 270 });
+  yLeft += doc.heightOfString(legal, { width: 270 });
+  y = brand.drawTotals(doc, blockTop, [
+    ['Subtotal', money(inv.subtotal)],
+    ['IVA', money(inv.iva)],
+    [isCredit ? 'Total' : 'Total a pagar', money(inv.total)],
+  ]);
+  y = Math.max(y, yLeft) + 20;
+
+  // ---- observaciones ----------------------------------------------------------
+  if (inv.notes) {
+    y = brand.ensureSpace(doc, y, 40);
+    y = brand.sectionHeading(doc, 'Observaciones', PAGE.L, y);
+    doc.font(F.regular).fontSize(8).fillColor(C.ink).text(inv.notes, PAGE.L, y, { width: PAGE.W });
+    y += doc.heightOfString(inv.notes, { width: PAGE.W }) + 14;
+  }
+
+  // ---- firmas -----------------------------------------------------------------
+  y = brand.ensureSpace(doc, y + 24, 40);
+  const sigW = 235;
+  [
+    ['Firma autorizada', isSale ? cfg.name : seller.name],
+    ['Recibido por', 'Nombre, C.C. y fecha'],
+  ].forEach(([label, sub], i) => {
+    const x = i === 0 ? PAGE.L : PAGE.R - sigW;
+    doc.moveTo(x, y).lineTo(x + sigW, y).lineWidth(1).strokeColor(C.ink).stroke();
+    doc.font(F.semibold).fontSize(7.5).fillColor(C.ink).text(label.toUpperCase(), x, y + 8, { width: sigW, characterSpacing: 1.1 });
+    doc.font(F.regular).fontSize(8).fillColor(C.smoke).text(sub || '', x, y + 20, { width: sigW });
+  });
+}
+
 router.get('/:id/pdf', async (req, res) => {
   const inv = await readInvoice(req.params.id);
   if (!inv) return res.status(404).json({ error: 'Factura no encontrada' });
-  const issuer = await einvoice.issuer();
-  const isSale = inv.direction === 'emitida';
-  const seller = isSale ? { name: issuer.name, nit: `${issuer.nit}-${einvoice.nitDv(issuer.nit)}` } : { name: inv.party_name, nit: inv.party_nit };
-  const buyer = isSale ? { name: inv.party_name, nit: inv.party_nit, address: inv.party_address, email: inv.party_email } : { name: issuer.name, nit: `${issuer.nit}-${einvoice.nitDv(issuer.nit)}` };
+  const [issuer, cfg] = await Promise.all([einvoice.issuer(), quoteSettings()]);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${inv.number}.pdf"`);
-  const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+  const doc = new PDFDocument({ size: 'LETTER', margin: 45, info: { Title: inv.number, Author: cfg.name } });
   doc.pipe(res);
-
-  if (inv.source === 'simulado') {
-    doc.save().rotate(-30, { origin: [306, 400] }).fontSize(60).fillColor('#e5e5e5').text('SIMULACIÓN', 60, 360, { width: 500, align: 'center' }).restore();
-  }
-  const title = inv.doc_type === 'nota_credito' ? 'NOTA CRÉDITO ELECTRÓNICA' : 'FACTURA ELECTRÓNICA DE VENTA';
-  doc.fontSize(15).fillColor('#191717').text(seller.name, 50, 50).fontSize(10).fillColor('#5b5959').text(`NIT ${seller.nit}`);
-  doc.fontSize(12).fillColor('#191717').text(title, 300, 50, { width: 262, align: 'right' }).fontSize(14).text(inv.number, { width: 262, align: 'right' });
-  doc.fontSize(9).fillColor('#5b5959').text(`Fecha: ${inv.issue_date}${inv.due_date ? `   Vence: ${inv.due_date}` : ''}`, 300, doc.y, { width: 262, align: 'right' });
-  if (inv.related_number) doc.text(`Referencia: factura ${inv.related_number}`, 300, doc.y, { width: 262, align: 'right' });
-
-  let y = 130;
-  doc.fontSize(9).fillColor('#5b5959').text('ADQUIRIENTE', 50, y);
-  doc.fontSize(11).fillColor('#191717').text(buyer.name || '—', 50, y + 12);
-  doc.fontSize(9).fillColor('#5b5959').text(`NIT/CC: ${buyer.nit || '—'}`, 50, y + 28);
-  if (buyer.address) doc.text(buyer.address, 50, y + 40);
-  if (buyer.email) doc.text(buyer.email, 50, y + 52);
-
-  y = 210;
-  doc.fontSize(9).fillColor('#5b5959');
-  doc.text('DESCRIPCIÓN', 50, y);
-  doc.text('CANT.', 290, y, { width: 45, align: 'right' });
-  doc.text('VR. UNIT.', 340, y, { width: 75, align: 'right' });
-  doc.text('IVA', 420, y, { width: 35, align: 'right' });
-  doc.text('SUBTOTAL', 460, y, { width: 102, align: 'right' });
-  y += 14;
-  doc.moveTo(50, y).lineTo(562, y).strokeColor('#dbdcdd').stroke();
-  y += 8;
-  doc.fontSize(10).fillColor('#191717');
-  for (const l of inv.lines) {
-    if (y > 660) {
-      doc.addPage();
-      y = 50;
-    }
-    const h = doc.heightOfString(l.description, { width: 235 });
-    doc.text(l.description, 50, y, { width: 235 });
-    doc.text(String(l.qty), 290, y, { width: 45, align: 'right' });
-    doc.text(money(l.unit_price), 340, y, { width: 75, align: 'right' });
-    doc.text(`${l.iva_rate}%`, 420, y, { width: 35, align: 'right' });
-    doc.text(money(l.subtotal), 460, y, { width: 102, align: 'right' });
-    y += Math.max(18, h + 6);
-  }
-  y += 6;
-  doc.moveTo(340, y).lineTo(562, y).strokeColor('#dbdcdd').stroke();
-  y += 8;
-  const row = (label, value, bold) => {
-    doc.fontSize(bold ? 12 : 10).fillColor(bold ? '#191717' : '#5b5959').text(label, 340, y, { width: 110 });
-    doc.fillColor('#191717').text(money(value), 460, y, { width: 102, align: 'right' });
-    y += bold ? 20 : 16;
-  };
-  row('Subtotal', inv.subtotal);
-  row('IVA', inv.iva);
-  row('Total', inv.total, true);
-
-  y = Math.max(y + 20, 600);
-  doc.fontSize(8).fillColor('#5b5959').text('CUFE / CUDE:', 50, y).text(inv.cufe || '—', 50, y + 11, { width: 512 });
-  doc.text(
-    inv.source === 'simulado'
-      ? 'Documento SIMULADO generado por Velara CRM para pruebas. No fue enviado a la DIAN y no tiene validez fiscal.'
-      : `Proveedor tecnológico: ${inv.source}`,
-    50,
-    y + 38,
-    { width: 512 }
-  );
-  if (inv.notes) doc.text(`Notas: ${inv.notes}`, 50, doc.y + 6, { width: 512 });
+  drawInvoicePdf(doc, { inv, issuer, cfg });
   doc.end();
 });
 
 module.exports = router;
+module.exports.drawInvoicePdf = drawInvoicePdf;
