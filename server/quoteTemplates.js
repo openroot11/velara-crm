@@ -188,6 +188,28 @@ const DEFAULT_CONFIG = {
       ],
     },
   ],
+  // Garantía por servicio -- la misma de la página "Garantía del taller"
+  // del sitio (velara/sitio/src/data/recursos.ts). El PDF arma la línea de
+  // garantía con esto; si cambia aquí, cambiarla también en el sitio y en
+  // el manual de atención (ver Datos maestros de la empresa en la bóveda).
+  garantias: {
+    'forros-para-carros': '6 meses en costura y cierres',
+    'tapizado-automotriz': '12 meses en costura y material',
+    'tapizado-de-motos': '12 meses en costura y material',
+    'carpas-para-negocio': '24 meses en costura y confección; la lona, según la garantía del fabricante',
+    forros: '6 meses en costura y cremalleras',
+  },
+  // Tiempo típico por servicio -- el de la ficha de cada servicio del sitio
+  // (velara/sitio/src/data/services.ts, "Tiempo típico").
+  tiempos: {
+    'forros-para-carros': '1 a 3 días hábiles',
+    'tapizado-automotriz': '1 a 3 semanas, según el alcance',
+    'tapizado-de-motos': '3 a 7 días',
+    'carpas-para-negocio': '2 a 4 semanas',
+    forros: '3 días a 2 semanas',
+  },
+  garantiaReclamo:
+    'Cubre defectos de confección, no el desgaste por uso ni daños por mal uso. Para hacerla efectiva escríbanos con el número de orden y una foto; coordinamos la reparación en un plazo de 5 días hábiles.',
   // Botones de "Notas y condiciones" en Nueva cotización.
   observaciones: [
     'Incluye instalación y transporte en Barranquilla.',
@@ -201,8 +223,7 @@ const DEFAULT_CONFIG = {
   // del cotizador de referencia y redactadas para VELARA.
   politicasFabricacion: [
     'Para iniciar la producción se requiere un anticipo del 50 %. El saldo debe cancelarse en su totalidad antes de la entrega o el despacho del pedido.',
-    'El tiempo de entrega es de 8 días hábiles, contados a partir de la confirmación del anticipo y de la definición completa del diseño. Puede variar según la cantidad, el tipo de producto o lo acordado con el asesor.',
-    'Garantía de 6 meses por defectos de fabricación (costuras, uniones y cierres) atribuibles a VELARA. Los reclamos se atienden dentro de los 15 días hábiles siguientes al reporte; el transporte corre por cuenta del cliente.',
+    'El plazo de entrega se cuenta a partir de la confirmación del anticipo y de la definición completa del diseño. La fecha en firme se acuerda con el asesor.',
     'Una vez aprobados los diseños y las especificaciones del pedido, cualquier modificación posterior es responsabilidad del cliente y puede generar costos adicionales y cambiar el tiempo de entrega.',
     'VELARA no se hace responsable por retrasos ocasionados por causas externas, como transporte, fuerza mayor, demoras de proveedores o falta de información oportuna por parte del cliente.',
   ],

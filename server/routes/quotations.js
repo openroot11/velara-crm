@@ -229,8 +229,8 @@ async function quoteSettings() {
     getSetting('quote_payment_details', ''),
     getSetting('quote_terms', ''),
   ]);
-  const { politicasFabricacion } = await quoteTemplates.getConfig();
-  return { name, nit, address, phone, email, web, payment, terms, termsFabricacion: politicasFabricacion };
+  const { politicasFabricacion, garantias, garantiaReclamo, tiempos } = await quoteTemplates.getConfig();
+  return { name, nit, address, phone, email, web, payment, terms, termsFabricacion: politicasFabricacion, garantias, garantiaReclamo, tiempos };
 }
 
 // Condiciones que trae la hoja oficial; se usan si en Ajustes no hay ninguna.
@@ -357,7 +357,17 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
   const terms = fabrication
     ? cfg.termsFabricacion.map((s) => String(s).trim()).filter(Boolean)
     : (cfg.terms || '').split('\n').map((s) => s.trim()).filter(Boolean);
-  const termLines = terms.length ? terms : DEFAULT_TERMS.slice();
+  // Tiempo de entrega y garantía salen de una sola tabla por servicio
+  // (Plantillas y tarifas), igual a la del sitio: se quitan las líneas de
+  // tiempo/garantía escritas a mano y se ponen las del servicio cotizado.
+  const slug = quotation.service_slug;
+  const termLines = (terms.length ? terms : DEFAULT_TERMS.slice()).filter((t) => !/^(garant[ií]a|tiempo estimado)/i.test(t));
+  const leadTime = cfg.tiempos && slug ? cfg.tiempos[slug] : null;
+  const warranty = cfg.garantias && slug ? cfg.garantias[slug] : null;
+  const generated = [];
+  if (leadTime) generated.push(`Tiempo estimado de entrega: ${leadTime} (puede variar según la carga del taller y la complejidad del trabajo).`);
+  if (warranty) generated.push(`Garantía: ${warranty}. ${cfg.garantiaReclamo || ''}`.trim());
+  termLines.splice(fabrication ? Math.min(2, termLines.length) : 0, 0, ...generated);
   if (quotation.validity_date) termLines.push(`Esta cotización es válida hasta el ${fmtDateDMY(quotation.validity_date)}.`);
   y = brand.ensureSpace(doc, y, 50);
   y = brand.sectionHeading(doc, fabrication ? 'Políticas y condiciones' : 'Condiciones comerciales', PAGE.L, y);

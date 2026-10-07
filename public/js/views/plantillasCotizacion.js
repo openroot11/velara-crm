@@ -203,6 +203,23 @@ export async function mount(container, ctx) {
         <button type="button" id="pt-add-cat" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">add</span>Categoría</button>`)}
 
       ${card(
+        'Tiempos y garantías por servicio',
+        'Salen en el PDF de cada cotización según el servicio. Deben ser iguales a los de la página web (ficha de cada servicio y "Garantía del taller") y al manual de atención.',
+        `<div class="flex flex-col gap-3">${SERVICES.filter((s) => s.slug !== 'otro')
+          .map(
+            (s) => `<div class="grid grid-cols-1 md:grid-cols-[180px_1fr_1.6fr] gap-2 items-center">
+              <span class="text-body-sm font-bold text-on-surface">${escapeHtml(s.title)}</span>
+              <div><label class="${LABEL}">Tiempo de entrega</label><input data-tiempo="${s.slug}" value="${escapeHtml(config.tiempos?.[s.slug] || '')}" class="${TXT}" /></div>
+              <div><label class="${LABEL}">Garantía</label><input data-garantia="${s.slug}" value="${escapeHtml(config.garantias?.[s.slug] || '')}" class="${TXT}" /></div>
+            </div>`
+          )
+          .join('')}
+          <div><label class="${LABEL}">Cobertura y cómo hacerla efectiva (va después de la garantía)</label>
+          <textarea id="pt-reclamo" rows="2" class="${TXT}">${escapeHtml(config.garantiaReclamo || '')}</textarea></div>
+        </div>`
+      )}
+
+      ${card(
         'Políticas de fabricación',
         'Salen en el PDF de las cotizaciones de carpas y forros, bajo "Políticas y condiciones". Una por línea. Las demás cotizaciones usan las condiciones de Configuración › Ajustes.',
         `<textarea id="pt-politicas" rows="7" class="${TXT}">${escapeHtml(config.politicasFabricacion.join('\n'))}</textarea>`
@@ -281,6 +298,15 @@ export async function mount(container, ctx) {
       .map((g) => ({ cat: g.cat.trim() || 'Sin categoría', items: g.items.filter((x) => String(x.t).trim()).map((x) => ({ t: x.t.trim(), d: String(x.d || '').trim(), p: Number(x.p) || 0 })) }))
       .filter((g) => g.items.length);
     const lines = (id) => root.querySelector(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
+    next.tiempos = {};
+    root.querySelectorAll('[data-tiempo]').forEach((el) => {
+      if (el.value.trim()) next.tiempos[el.dataset.tiempo] = el.value.trim();
+    });
+    next.garantias = {};
+    root.querySelectorAll('[data-garantia]').forEach((el) => {
+      if (el.value.trim()) next.garantias[el.dataset.garantia] = el.value.trim();
+    });
+    next.garantiaReclamo = root.querySelector('#pt-reclamo').value.trim();
     next.politicasFabricacion = lines('#pt-politicas');
     next.observaciones = lines('#pt-obs');
     if (getPath(next, 'costeo.margen') >= 1) {
