@@ -328,7 +328,7 @@ function ensureSpace(doc, y, h) {
   return y;
 }
 
-// "3225640747" -> "+57 322 564 0747"; deja tal cual lo que ya trae formato.
+// "3003666093" -> "+57 300 366 6093"; deja tal cual lo que ya trae formato.
 function formatPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return '';

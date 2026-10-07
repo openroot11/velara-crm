@@ -997,14 +997,14 @@ async function seedQuoteDefaults() {
   await ensureDefaultSetting('quote_company_name', 'Velara Taller S.A.S.');
   await ensureDefaultSetting('quote_company_nit', '');
   await ensureDefaultSetting('quote_company_address', 'Calle 56 # 12C-02, Local 3, Barranquilla, Atlántico');
-  await ensureDefaultSetting('quote_company_phone', '3225640747');
+  await ensureDefaultSetting('quote_company_phone', '3003666093');
   await ensureDefaultSetting('quote_company_email', 'velarataller@gmail.com');
   await ensureDefaultSetting('quote_company_web', '');
   await ensureDefaultSetting('quote_payment_details', '');
   await ensureDefaultSetting(
     'quote_terms',
     'Tiempo estimado de entrega: 1 a 3 días hábiles (puede variar según la carga del taller y la complejidad del trabajo).\n' +
-      'Garantía de 6 meses por defectos de costura y cierres.\n' +
+      'Garantía de 6 meses por defectos de costura y cierres. Los reclamos se atienden dentro de los 15 días hábiles siguientes al reporte.\n' +
       'El valor puede variar según el estado real del vehículo/mueble y las personalizaciones solicitadas al momento de recibirlo.\n' +
       'Para iniciar el trabajo se confirma disponibilidad y se coordina el ingreso del vehículo o los muebles al taller.\n' +
       'Esta cotización no representa una reserva de cupo.'
