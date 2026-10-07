@@ -7,6 +7,7 @@ const odoo = require('../odoo');
 const googleAds = require('../googleAds');
 const nativeQuotes = require('../nativeQuotes');
 const velaraServices = require('../velaraServices');
+const erp = require('../erp');
 const { broadcast } = require('../realtime');
 const { requireRole } = require('../middleware/auth');
 
@@ -1218,7 +1219,7 @@ router.post('/:id/payments', async (req, res) => {
   const lead = await db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
   if (!canOperateOn(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso sobre este lead' });
-  const { amount, notes, method } = req.body || {};
+  const { amount, notes, method, account_id, work_order_id } = req.body || {};
   const amountNum = Number(amount);
   if (!amountNum || amountNum <= 0) return res.status(400).json({ error: 'amount debe ser mayor a 0' });
 
@@ -1228,11 +1229,19 @@ router.post('/:id/payments', async (req, res) => {
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
-  // Medio de pago (ver Caja, server/routes/cash.js) -- opcional.
+  // Cuenta donde entró la plata (Finanzas, ver server/routes/cash.js); si
+  // no llega, se elige por el medio de pago. Trabajo opcional.
   const cleanMethod = ['efectivo', 'transferencia', 'tarjeta', 'nequi', 'otro'].includes(method) ? method : null;
+  let acc;
+  try {
+    acc = await erp.resolveAccount(account_id, cleanMethod);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+  const wo = work_order_id ? await db.prepare('SELECT id FROM work_orders WHERE id = ?').get(Number(work_order_id)) : null;
   const info = await db
-    .prepare('INSERT INTO payments (lead_id, amount, paid_at, notes, registered_by, method) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(id, amountNum, paidAt, (notes && notes.trim()) || null, req.user.id || null, cleanMethod);
+    .prepare('INSERT INTO payments (lead_id, amount, paid_at, notes, registered_by, method, account_id, work_order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, amountNum, paidAt, (notes && notes.trim()) || null, req.user.id || null, acc.method, acc.account_id, wo ? wo.id : null);
 
   const payment = await db.prepare('SELECT * FROM payments WHERE id = ?').get(info.lastInsertRowid);
   broadcast('leads_changed', { reason: 'payment_registered', id });

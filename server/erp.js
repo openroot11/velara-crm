@@ -11,7 +11,22 @@ const UNITS = ['m', 'm2', 'und', 'kg', 'rollo', 'lt'];
 // Categorías de gasto: las comparten Caja (cash_entries) y las facturas de
 // compra recibidas (invoices), para que un gasto pagado en efectivo y uno
 // que llegó con factura electrónica se sumen en el mismo rubro.
-const EXPENSE_CATEGORIES = ['Compra de materiales', 'Arriendo', 'Servicios públicos', 'Nómina y pagos a operarios', 'Transporte y domicilios', 'Herramientas y mantenimiento', 'Publicidad', 'Impuestos', 'Otros gastos'];
+// Rubros de gasto del negocio (Finanzas y facturas recibidas). Los nombres
+// viejos se conservan tal cual: hay reglas de clasificación y movimientos
+// guardados con ellos.
+const EXPENSE_CATEGORIES = [
+  'Compra de materiales',
+  'Nómina y pagos a operarios',
+  'Arriendo',
+  'Servicios públicos',
+  'Transporte y domicilios',
+  'Herramientas y mantenimiento',
+  'Publicidad',
+  'Impuestos',
+  'Comisiones y gastos bancarios',
+  'Alimentación y cafetería',
+  'Otros gastos',
+];
 
 // Fecha de hoy en Colombia (AAAA-MM-DD).
 function todayBogota(offsetDays = 0) {
@@ -53,4 +68,26 @@ async function applyMovement({ material_id, type, qty, unit_cost, work_order_id,
   return run();
 }
 
-module.exports = { MOVEMENT_TYPES, UNITS, EXPENSE_CATEGORIES, todayBogota, nowUtc, applyMovement };
+// Medio de pago que corresponde a cada tipo de cuenta, y al revés: la cuenta
+// por defecto para un medio de pago (para lo que llega sin cuenta, como un
+// pago a proveedor desde Compras).
+const METHOD_BY_ACCOUNT_KIND = { efectivo: 'efectivo', digital: 'nequi', banco: 'transferencia' };
+const ACCOUNT_KIND_BY_METHOD = { efectivo: 'efectivo', nequi: 'digital', transferencia: 'banco', tarjeta: 'banco' };
+
+// Devuelve { account_id, method } para un movimiento de plata: si llega una
+// cuenta válida se usa esa (y el medio sale de su tipo); si no, se elige la
+// cuenta según el medio de pago (o Efectivo). Lanza 400 si la cuenta no existe.
+async function resolveAccount(accountId, method) {
+  if (accountId) {
+    const acc = await db.prepare('SELECT * FROM accounts WHERE id = ?').get(Number(accountId));
+    if (!acc) throw Object.assign(new Error('Cuenta no encontrada'), { status: 400 });
+    return { account_id: acc.id, method: METHOD_BY_ACCOUNT_KIND[acc.kind] || method || 'otro' };
+  }
+  const kind = ACCOUNT_KIND_BY_METHOD[method] || 'efectivo';
+  const acc =
+    (await db.prepare('SELECT id FROM accounts WHERE kind = ? AND active = 1 ORDER BY position, id LIMIT 1').get(kind)) ||
+    (await db.prepare('SELECT id FROM accounts WHERE active = 1 ORDER BY position, id LIMIT 1').get());
+  return { account_id: acc ? acc.id : null, method: method || METHOD_BY_ACCOUNT_KIND[kind] };
+}
+
+module.exports = { MOVEMENT_TYPES, UNITS, EXPENSE_CATEGORIES, METHOD_BY_ACCOUNT_KIND, todayBogota, nowUtc, applyMovement, resolveAccount };

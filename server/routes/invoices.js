@@ -446,13 +446,19 @@ router.post('/:id/pay', async (req, res) => {
   if (inv.doc_type !== 'factura' || inv.status !== 'aceptada') return res.status(409).json({ error: 'Esta factura no se puede marcar como pagada' });
   if (inv.payment_status === 'pagada') return res.status(409).json({ error: 'Ya está pagada' });
   const paidAt = isoDate(req.body?.date) || erp.todayBogota();
-  const method = String(req.body?.method || 'transferencia');
+  // Cuenta de la que salió el pago (Finanzas); sin cuenta, se elige por el medio.
+  let acc;
+  try {
+    acc = await erp.resolveAccount(req.body?.account_id, String(req.body?.method || 'transferencia'));
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
   await db.transaction(async () => {
     await db.prepare("UPDATE invoices SET payment_status = 'pagada', paid_at = ?, updated_at = datetime('now') WHERE id = ?").run(paidAt, inv.id);
     if (inv.direction === 'recibida' && req.body?.register_cash !== false) {
       await db
-        .prepare('INSERT INTO cash_entries (kind, category, amount, method, description, entry_date, invoice_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run('egreso', inv.category || 'Otros gastos', Math.round(inv.total), method, `Factura ${inv.number} · ${inv.party_name}`, paidAt, inv.id, req.user.id || null);
+        .prepare('INSERT INTO cash_entries (kind, category, amount, method, description, entry_date, invoice_id, account_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run('egreso', inv.category || 'Otros gastos', Math.round(inv.total), acc.method, `Factura ${inv.number} · ${inv.party_name}`, paidAt, inv.id, acc.account_id, req.user.id || null);
     }
   })();
   broadcast('invoices_changed', { id: inv.id });

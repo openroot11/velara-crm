@@ -20,7 +20,7 @@ function renderOverlay(firstRun, onSuccess) {
       <div class="flex flex-col items-center mb-7">
         <img src="/img/brand/logo-eslogan-positivo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto dark:hidden" />
         <img src="/img/brand/logo-eslogan-negativo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto hidden dark:block" />
-        <h1 class="overline text-on-surface-variant text-center mt-6">CRM · Comercial y producción</h1>
+        <h1 class="eyebrow text-on-surface-variant text-center mt-6">CRM · Comercial y producción</h1>
         <span class="rule-under mt-3"></span>
         <p class="text-body-sm font-body-sm text-on-surface-variant text-center mt-4">
           ${firstRun ? 'Crea la primera cuenta de administrador para iniciar el control de ventas.' : 'Ingresa con tu usuario para acceder al sistema.'}

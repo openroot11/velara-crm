@@ -51,7 +51,7 @@ function kpiCard(label, value, sub, href) {
   const tag = href ? 'a' : 'div';
   return `
     <${tag} ${href ? `href="${href}"` : ''} class="${CARD} block ${href ? 'hover:border-on-surface transition-colors' : ''}">
-      <p class="overline text-on-surface-variant mb-2">${label}</p>
+      <p class="eyebrow text-on-surface-variant mb-2">${label}</p>
       <p class="text-[24px] leading-[30px] sm:text-[32px] sm:leading-[38px] font-bold tracking-tight text-on-surface truncate">${value}</p>
       ${sub ? `<p class="text-body-sm text-on-surface-variant mt-2 truncate">${sub}</p>` : ''}
     </${tag}>`;
@@ -151,20 +151,20 @@ export async function mount(container, ctx) {
       <section class="relative overflow-hidden rounded-xl bg-[#0B0B0B] text-[#F2F0EA] px-6 sm:px-10 py-7 sm:py-8 mb-8">
         ${PATTERN}
         <div class="relative max-w-[60%] min-w-[220px]">
-          <p class="overline text-[#A7A9AC] first-letter:uppercase">${escapeHtml(today())}</p>
+          <p class="eyebrow text-[#A7A9AC] first-letter:uppercase">${escapeHtml(today())}</p>
           <h2 class="text-headline-lg font-headline-lg mt-3">${greeting()}, ${escapeHtml(ctx.user?.username || '')}</h2>
           <span class="rule-under mt-4" style="background:#D71920"></span>
         </div>
       </section>
 
       <div id="ini-resumen" class="mb-10">
-        <p class="overline text-on-surface-variant mb-4">Resumen de ${escapeHtml(monthName())}</p>
+        <p class="eyebrow text-on-surface-variant mb-4">Resumen de ${escapeHtml(monthName())}</p>
         <div id="ini-kpis" class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4"></div>
         <div id="ini-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4"></div>
         <p id="ini-loading" class="text-body-sm text-on-surface-variant py-6 text-center">Cargando resumen…</p>
       </div>
 
-      <p class="overline text-on-surface-variant mb-4">Aplicaciones</p>
+      <p class="eyebrow text-on-surface-variant mb-4">Aplicaciones</p>
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         ${apps
           .map(

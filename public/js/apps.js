@@ -55,18 +55,13 @@ export const APPS = [
   {
     key: 'finanzas',
     label: 'Finanzas',
-    desc: 'Caja y cartera',
+    desc: 'Cuentas, gastos, cobros y ganancia',
     icon: 'account_balance_wallet',
     color: '#3F9C6B',
-    routes: [['finanzas', 'Caja y cartera']],
-  },
-  {
-    key: 'facturacion',
-    label: 'Facturación',
-    desc: 'Facturas de venta, compras y gastos',
-    icon: 'receipt_long',
-    color: '#5B6BBF',
-    routes: [['facturacion', 'Facturas']],
+    routes: [
+      ['finanzas', 'Cuentas y movimientos'],
+      ['facturacion', 'Facturación electrónica'],
+    ],
   },
   {
     key: 'tableros',

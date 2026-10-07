@@ -2,7 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// NOVA_DATA_DIR permite levantar una copia de prueba con otra base sin tocar la real.
+const DATA_DIR = process.env.NOVA_DATA_DIR ? path.resolve(process.env.NOVA_DATA_DIR) : path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // Abrir el archivo YA es "conectar" en SQLite (no hay handshake de red que
@@ -504,6 +505,81 @@ CREATE INDEX IF NOT EXISTS idx_warranty_claims_order ON warranty_claims(work_ord
 // DIAN identifica cada documento: UNIQUE evita bajar dos veces la misma
 // factura recibida.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Finanzas (ver server/routes/cash.js): dónde está la plata (cuentas con su
+// saldo), traslados entre cuentas y gastos fijos del mes. Los movimientos
+// siguen en cash_entries (gastos y otros ingresos) y payments (abonos de
+// clientes); a ambos se les agrega la cuenta y, opcional, el trabajo.
+// ---------------------------------------------------------------------------
+const FINANCE_SCHEMA_SQL = `
+-- Cuentas de dinero del negocio. kind: efectivo | digital (Nequi/Daviplata)
+-- | banco. El saldo no se guarda: es opening_balance + lo que entró - lo que
+-- salió (movimientos y traslados).
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'efectivo',
+  opening_balance REAL NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Plata que se mueve de una cuenta a otra (ej. consignar el efectivo en el
+-- banco). No es ingreso ni gasto: solo cambia dónde está.
+CREATE TABLE IF NOT EXISTS account_transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  to_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount REAL NOT NULL CHECK (amount > 0),
+  transfer_date TEXT NOT NULL,
+  note TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Gastos fijos que se repiten cada mes (arriendo, servicios, internet...).
+-- Pagar uno crea el egreso en cash_entries con recurring_id; así se sabe
+-- cuáles faltan por pagar en el mes.
+CREATE TABLE IF NOT EXISTS recurring_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  day_of_month INTEGER NOT NULL DEFAULT 1,
+  account_id INTEGER REFERENCES accounts(id),
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+// Cuentas con las que arranca el negocio (decisión del dueño: efectivo,
+// Nequi/Daviplata y banco). Solo si no hay ninguna.
+async function seedAccounts() {
+  const n = await db.prepare('SELECT COUNT(*) AS n FROM accounts').get();
+  if (n.n > 0) return;
+  const ins = db.prepare('INSERT INTO accounts (name, kind, position) VALUES (?, ?, ?)');
+  await ins.run('Efectivo', 'efectivo', 1);
+  await ins.run('Nequi / Daviplata', 'digital', 2);
+  await ins.run('Banco', 'banco', 3);
+}
+
+// Movimientos registrados antes de existir las cuentas: se asignan a la
+// cuenta que corresponde a su medio de pago (efectivo -> Efectivo, nequi ->
+// Nequi, transferencia/tarjeta -> Banco; sin dato -> Efectivo).
+async function backfillAccounts() {
+  const byKind = async (kind) => (await db.prepare('SELECT id FROM accounts WHERE kind = ? ORDER BY position, id LIMIT 1').get(kind))?.id || null;
+  const cash = await byKind('efectivo');
+  const digital = (await byKind('digital')) || cash;
+  const bank = (await byKind('banco')) || cash;
+  if (!cash) return;
+  for (const table of ['cash_entries', 'payments']) {
+    await db.prepare(`UPDATE ${table} SET account_id = ? WHERE account_id IS NULL AND method = 'nequi'`).run(digital);
+    await db.prepare(`UPDATE ${table} SET account_id = ? WHERE account_id IS NULL AND method IN ('transferencia', 'tarjeta')`).run(bank);
+    await db.prepare(`UPDATE ${table} SET account_id = ? WHERE account_id IS NULL`).run(cash);
+  }
+}
+
 const INVOICE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1019,8 +1095,22 @@ async function init() {
   exec(INVOICE_SCHEMA_SQL);
   // Pago de una factura de compra registrado como egreso de Caja.
   ensureColumn('cash_entries', 'invoice_id', 'INTEGER REFERENCES invoices(id)');
+  // Finanzas: cuentas, traslados y gastos fijos; cada movimiento sabe de qué
+  // cuenta salió/entró y, si aplica, a qué trabajo (ganancia por trabajo) u
+  // operario (pagos al taller) corresponde, y puede llevar foto del recibo.
+  exec(FINANCE_SCHEMA_SQL);
+  ensureColumn('cash_entries', 'account_id', 'INTEGER REFERENCES accounts(id)');
+  ensureColumn('cash_entries', 'work_order_id', 'INTEGER REFERENCES work_orders(id)');
+  ensureColumn('cash_entries', 'worker_id', 'INTEGER REFERENCES workers(id)');
+  ensureColumn('cash_entries', 'recurring_id', 'INTEGER REFERENCES recurring_expenses(id)');
+  ensureColumn('cash_entries', 'receipt_path', 'TEXT');
+  ensureColumn('cash_entries', 'receipt_mime', 'TEXT');
+  ensureColumn('payments', 'account_id', 'INTEGER REFERENCES accounts(id)');
+  ensureColumn('payments', 'work_order_id', 'INTEGER REFERENCES work_orders(id)');
+  await seedAccounts();
+  await backfillAccounts();
   await seedIfEmpty();
   await seedQuoteDefaults();
 }
 
-module.exports = { db, getSetting, setSetting, DEFAULT_ADVISORS, init };
+module.exports = { db, getSetting, setSetting, DEFAULT_ADVISORS, DATA_DIR, init };
