@@ -7,47 +7,38 @@
 function renderOverlay(firstRun, onSuccess) {
   const overlay = document.createElement('div');
   overlay.id = 'auth-overlay';
-  overlay.className = 'fixed inset-0 z-[200] bg-[#0B0B0B] flex items-center justify-center p-4 overflow-hidden';
+  overlay.className = 'fixed inset-0 z-[200] bg-shell flex items-center justify-center p-4 overflow-hidden';
   overlay.innerHTML = `
-    <!-- Patrón de marca (planos a 47,4° y una línea roja), saliendo de los bordes. -->
-    <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <polygon points="-200,0 260,0 1088,900 628,900" fill="#141414"/>
-      <polygon points="420,0 560,0 1388,900 1248,900" fill="#1A1A1A"/>
-      <polygon points="1180,0 1600,0 1600,456" fill="#121212"/>
-      <polygon points="1300,0 1340,0 1600,283 1600,326" fill="#D71920"/>
-    </svg>
-    <div class="relative w-full max-w-sm bg-surface rounded-xl shadow-2xl p-8">
+    <div class="relative w-full max-w-sm bg-surface rounded-2xl border border-outline-variant shadow-[var(--shadow-window)] p-8">
       <div class="flex flex-col items-center mb-7">
-        <img src="/img/brand/logo-eslogan-positivo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto dark:hidden" />
-        <img src="/img/brand/logo-eslogan-negativo.svg" alt="Velara · Soluciones a medida" class="w-[210px] h-auto hidden dark:block" />
-        <h1 class="eyebrow text-on-surface-variant text-center mt-6">CRM · Comercial y producción</h1>
-        <span class="rule-under mt-3"></span>
-        <p class="text-body-sm font-body-sm text-on-surface-variant text-center mt-4">
+        <img src="/img/brand/logo-eslogan-positivo.svg" alt="Velara · Soluciones a medida" class="w-[170px] h-auto dark:hidden" />
+        <img src="/img/brand/logo-eslogan-negativo.svg" alt="Velara · Soluciones a medida" class="w-[170px] h-auto hidden dark:block" />
+        <p class="text-body-sm font-body-sm text-on-surface-variant text-center mt-5">
           ${firstRun ? 'Crea la primera cuenta de administrador para iniciar el control de ventas.' : 'Ingresa con tu usuario para acceder al sistema.'}
         </p>
       </div>
       <form id="auth-form" class="space-y-4">
         <div>
-          <label class="block text-label-bold font-label-bold text-on-surface-variant mb-1 uppercase tracking-wider">Usuario</label>
+          <label class="block text-[12.5px] text-on-surface-variant mb-1.5">Usuario</label>
           <input id="auth-username" type="text" required autocomplete="username"
-            class="w-full p-2.5 bg-surface-container-lowest border border-outline-variant rounded-md text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
+            class="w-full h-10 px-3 bg-surface border border-outline-variant rounded-lg text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
         </div>
         <div>
-          <label class="block text-label-bold font-label-bold text-on-surface-variant mb-1 uppercase tracking-wider">
+          <label class="block text-[12.5px] text-on-surface-variant mb-1.5">
             ${firstRun ? 'Nueva contraseña' : 'Contraseña'}
           </label>
           <input id="auth-password" type="password" required minlength="4" autocomplete="${firstRun ? 'new-password' : 'current-password'}"
-            class="w-full p-2.5 bg-surface-container-lowest border border-outline-variant rounded-md text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
+            class="w-full h-10 px-3 bg-surface border border-outline-variant rounded-lg text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
         </div>
         ${firstRun ? `
         <div>
-          <label class="block text-label-bold font-label-bold text-on-surface-variant mb-1 uppercase tracking-wider">Confirmar contraseña</label>
+          <label class="block text-[12.5px] text-on-surface-variant mb-1.5">Confirmar contraseña</label>
           <input id="auth-password-confirm" type="password" required minlength="4" autocomplete="new-password"
-            class="w-full p-2.5 bg-surface-container-lowest border border-outline-variant rounded-md text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
+            class="w-full h-10 px-3 bg-surface border border-outline-variant rounded-lg text-body-md focus:border-outline focus:ring-2 focus:ring-outline/20 outline-none transition-all" />
         </div>` : ''}
         <p id="auth-error" class="text-body-sm font-body-sm text-error hidden"></p>
-        <button type="submit" class="btn btn-primary w-full py-3">
-          ${firstRun ? 'CREAR CUENTA E INGRESAR' : 'INGRESAR'}
+        <button type="submit" class="btn btn-primary w-full h-10">
+          ${firstRun ? 'Crear cuenta e ingresar' : 'Ingresar'}
         </button>
       </form>
     </div>

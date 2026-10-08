@@ -12,13 +12,12 @@ import { escapeHtml } from '../utils.js';
 // ---- Tarjeta de cifra (KPI) -------------------------------------------------
 // tone: '' | 'good' | 'bad' | 'warn'
 export function statCard(label, value, hint = '', tone = '') {
-  const border = tone === 'bad' ? 'border-error/40' : tone === 'warn' ? 'border-tertiary/50' : 'border-outline-variant';
-  const color = tone === 'bad' ? 'text-error' : tone === 'good' ? 'text-secondary' : 'text-on-surface';
+  const color = tone === 'bad' ? 'text-error' : tone === 'good' ? 'text-status-good' : tone === 'warn' ? 'text-tertiary' : 'text-on-surface';
   return `
-    <div class="border ${border} rounded-xl p-4 bg-surface-container-lowest min-w-0">
-      <p class="text-[10px] font-label-bold text-on-surface-variant uppercase tracking-wider mb-1">${label}</p>
-      <p class="text-[17px] leading-6 sm:text-headline-sm font-headline-sm font-bold ${color} break-words">${value}</p>
-      ${hint ? `<p class="text-[11px] text-on-surface-variant mt-0.5">${hint}</p>` : ''}
+    <div class="border border-outline-variant rounded-xl px-4 py-3.5 bg-surface min-w-0">
+      <p class="text-[12.5px] text-on-surface-variant mb-1 truncate">${label}</p>
+      <p class="text-[20px] leading-[28px] font-medium tracking-[-0.02em] ${color} break-words">${value}</p>
+      ${hint ? `<p class="text-[11.5px] text-outline mt-0.5">${hint}</p>` : ''}
     </div>`;
 }
 
@@ -27,7 +26,7 @@ export function statCard(label, value, hint = '', tone = '') {
 // engancha sus propios clics); paintTabBar marca la activa.
 export function tabBarHtml(tabs, active = '') {
   return `
-    <div class="flex gap-1 border-b border-outline-variant mb-gutter overflow-x-auto overflow-y-hidden" role="tablist">
+    <div class="flex border-b border-outline-variant mb-gutter overflow-x-auto overflow-y-hidden" role="tablist">
       ${tabs
         .map(
           (t) => `<button type="button" data-tab="${t.key}" role="tab" aria-selected="${t.key === active}" class="${tabCls(t.key === active)}">${
@@ -38,7 +37,9 @@ export function tabBarHtml(tabs, active = '') {
     </div>`;
 }
 
-const TAB_BASE = 'px-4 py-2.5 -mb-px border-b-2 text-body-sm font-label-bold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors';
+// Pestañas como "Default / Only important" de Shakuro: texto de 13px, la
+// activa en negro con subrayado fino.
+const TAB_BASE = 'px-1 mr-4 py-2.5 -mb-px border-b-[1.5px] text-[13px] font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors';
 function tabCls(on) {
   return `${TAB_BASE} ${on ? 'border-on-surface text-on-surface' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`;
 }
@@ -83,10 +84,10 @@ export const DATE_PRESETS = {
 // onChange(from, to) cada vez que cambia. El atajo que coincide con el
 // rango actual queda marcado (neutro, no naranja).
 export function mountDateRange(el, { idPrefix, from, to, presets, onChange }) {
-  const fieldCls = 'p-2 bg-surface-container-lowest border border-outline-variant rounded-md text-body-sm outline-none focus:border-outline';
-  const labelCls = 'block text-[10px] font-label-bold uppercase tracking-wider text-on-surface-variant mb-1';
-  const ON = 'border-outline bg-surface-container-high text-on-surface font-bold';
-  const OFF = 'border-outline-variant text-on-surface hover:bg-surface-container-low';
+  const fieldCls = 'h-8 px-2.5 bg-surface border border-outline-variant rounded-lg text-[13px] outline-none focus:border-outline';
+  const labelCls = 'block text-[12px] text-on-surface-variant mb-1';
+  const ON = 'border-transparent bg-surface-container-high text-on-surface font-medium';
+  const OFF = 'border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface';
   el.innerHTML = `
     <div><label for="${idPrefix}-from" class="${labelCls}">Desde</label><input id="${idPrefix}-from" type="date" value="${from}" class="${fieldCls}" /></div>
     <div><label for="${idPrefix}-to" class="${labelCls}">Hasta</label><input id="${idPrefix}-to" type="date" value="${to}" class="${fieldCls}" /></div>
@@ -101,7 +102,7 @@ export function mountDateRange(el, { idPrefix, from, to, presets, onChange }) {
     el.querySelectorAll('[data-preset]').forEach((b) => {
       const [pf, pt] = DATE_PRESETS[b.dataset.preset][1]();
       const on = pf === from && pt === to;
-      b.className = `px-3 py-2 border rounded-md text-body-sm transition-colors ${on ? ON : OFF}`;
+      b.className = `h-8 px-3 border rounded-lg text-[13px] transition-colors ${on ? ON : OFF}`;
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
@@ -129,7 +130,8 @@ export function mountDateRange(el, { idPrefix, from, to, presets, onChange }) {
 
 // ---- Chip ------------------------------------------------------------------------
 export function chip(text, cls) {
-  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${cls}">${escapeHtml(text)}</span>`;
+  // Etiqueta de estado como "Active / New / VIP": esquinas de 6px, peso medio.
+  return `<span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11.5px] font-medium whitespace-nowrap ${cls}">${escapeHtml(text)}</span>`;
 }
 
 // ---- Barra horizontal de proporción (listas "en qué se fue la plata") --------------

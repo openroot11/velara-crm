@@ -17,9 +17,10 @@ export const APPS = [
     routes: [
       ['embudo', 'Embudo'],
       ['clientes', 'Clientes'],
-      ['manual', 'Manual de atención'],
     ],
+    // Fuera del menú (minimalismo): la pantalla sigue existiendo.
     hidden: [
+      ['manual', 'Manual de atención'],
       ['ventas', 'Leads'],
       ['seguimiento', 'Seguimiento'],
       ['ventas-cerradas', 'Ventas cerradas'],
@@ -28,17 +29,16 @@ export const APPS = [
   {
     // Cotizaciones: su propio apartado. "Nueva cotización" trae las
     // plantillas según lo que se fabrica (data/quoteTemplates.js); las
-    // tarifas, el catálogo y las políticas se ajustan en "Plantillas y
-    // tarifas". Todo queda ligado al lead y al embudo de Ventas.
+    // tarifas, el catálogo y las políticas se ajustan en Configuración ›
+    // "Políticas y tarifas". Todo queda ligado al lead y al embudo de Ventas.
     key: 'cotizaciones',
     label: 'Cotizaciones',
-    desc: 'Cotizar con plantillas, listado y tarifas',
+    desc: 'Cotizar y ver el listado',
     icon: 'request_quote',
     color: '#C7420E',
     routes: [
       ['cotizar', 'Nueva cotización'],
       ['cotizaciones', 'Cotizaciones'],
-      ['plantillas-cotizacion', 'Plantillas y tarifas'],
     ],
   },
   {
@@ -65,6 +65,7 @@ export const APPS = [
   },
   {
     key: 'compras',
+    archived: true,
     label: 'Compras',
     desc: 'Proveedores y órdenes de compra',
     icon: 'shopping_cart',
@@ -84,6 +85,7 @@ export const APPS = [
   },
   {
     key: 'tableros',
+    archived: true,
     label: 'Tableros',
     desc: 'Resumen del negocio',
     icon: 'space_dashboard',
@@ -95,6 +97,7 @@ export const APPS = [
   },
   {
     key: 'reportes',
+    archived: true,
     label: 'Reportes',
     desc: 'Informes y análisis comercial',
     icon: 'bar_chart',
@@ -108,12 +111,56 @@ export const APPS = [
   {
     key: 'config',
     label: 'Configuración',
-    desc: 'Equipo y ajustes',
+    desc: 'Equipo, políticas de cotización y ajustes',
     icon: 'settings',
     color: '#6B7280',
     routes: [
       ['asesores', 'Equipo de ventas'],
+      ['plantillas-cotizacion', 'Políticas y tarifas'],
       ['ajustes', 'Ajustes'],
+    ],
+  },
+];
+
+// Menú lateral único, siempre visible y con todo junto (como la referencia
+// Shakuro): grupos con un rótulo gris y un ícono por pantalla. Reemplaza el
+// menú por aplicación estilo Odoo. Las pantallas que el rol no puede ver no
+// salen; un grupo sin pantallas visibles tampoco.
+export const NAV = [
+  {
+    label: '',
+    items: [['inicio', 'Inicio', 'home']],
+  },
+  {
+    label: 'Ventas',
+    items: [
+      ['embudo', 'Embudo', 'filter_alt'],
+      ['clientes', 'Clientes', 'group'],
+      ['cotizar', 'Nueva cotización', 'add_notes'],
+      ['cotizaciones', 'Cotizaciones', 'request_quote'],
+    ],
+  },
+  {
+    label: 'Taller',
+    items: [
+      ['trabajos', 'Trabajos', 'construction'],
+      ['operarios', 'Operarios', 'engineering'],
+      ['inventario', 'Inventario', 'inventory_2'],
+    ],
+  },
+  {
+    label: 'Finanzas',
+    items: [
+      ['finanzas', 'Cuentas y movimientos', 'account_balance_wallet'],
+      ['facturacion', 'Facturación electrónica', 'receipt_long'],
+    ],
+  },
+  {
+    label: 'Configuración',
+    items: [
+      ['asesores', 'Equipo de ventas', 'badge'],
+      ['plantillas-cotizacion', 'Políticas y tarifas', 'tune'],
+      ['ajustes', 'Ajustes', 'settings'],
     ],
   },
 ];
@@ -146,9 +193,11 @@ export function appOfRoute(route) {
 }
 
 // Apps con al menos una pantalla permitida; la primera permitida es la de
-// entrada al abrir la app.
+// entrada al abrir la app. "archived" = app que sale del Inicio por
+// minimalismo (sus pantallas siguen existiendo y abren por URL); quitar la
+// marca la vuelve a mostrar.
 export function visibleApps(allowedRoutes) {
-  return APPS.map((a) => {
+  return APPS.filter((a) => !a.archived).map((a) => {
     const first = a.routes.find(([r]) => allowedRoutes.includes(r));
     return first ? { ...a, firstRoute: first[0] } : null;
   }).filter(Boolean);

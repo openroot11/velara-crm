@@ -213,7 +213,7 @@ function renderCatalogo(body, config, done) {
   const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   body.innerHTML = `
     <input data-filter type="search" placeholder="Buscar: cabina 15, surtidor, ascensor…" class="${INPUT} mb-3" />
-    <p class="text-[11px] text-on-surface-variant mb-2">Precios unitarios. Se editan en Cotizaciones › Plantillas y tarifas; el texto y el precio también se pueden cambiar en la cotización.</p>
+    <p class="text-[11px] text-on-surface-variant mb-2">Precios unitarios. Se editan en Configuración › Políticas y tarifas; el texto y el precio también se pueden cambiar en la cotización.</p>
     <div data-list class="max-h-[50vh] overflow-y-auto border border-outline-variant rounded-lg"></div>
     <p data-count class="text-body-sm text-on-surface-variant mt-3"></p>
     ${footer('Agregar seleccionados')}`;
@@ -403,7 +403,7 @@ function renderAuto(kind) {
         ${moto ? checkHtml('antideslizante', 'Antideslizante', it.antideslizante) : ''}
       </div>
       <div class="mt-3 max-w-xs">${inputHtml('precioManual', 'Precio unitario', it.precioManual, 'number', 'min="0" step="1000"')}</div>
-      <div data-nobase class="mt-4 hidden rounded-lg bg-tertiary-container text-on-tertiary-container p-3 text-body-sm">Esta opción aún no tiene precio base. Escriba el precio arriba, o configúrelo en Cotizaciones › Plantillas y tarifas para que se sugiera solo.</div>
+      <div data-nobase class="mt-4 hidden rounded-lg bg-tertiary-container text-on-tertiary-container p-3 text-body-sm">Esta opción aún no tiene precio base. Escriba el precio arriba, o configúrelo en Configuración › Políticas y tarifas para que se sugiera solo.</div>
       <div data-price class="mt-4"></div>
       ${footer()}`;
     const priceInput = body.querySelector('[data-k="precioManual"]');

@@ -2,38 +2,28 @@ import { api } from './api.js';
 import { ws } from './ws.js';
 import { escapeHtml } from './utils.js';
 import { getCurrentUser, logout } from './auth.js';
-import { ROUTES_BY_ROLE, appOfRoute, routeLabel } from './apps.js';
+import { ROUTES_BY_ROLE, NAV, appOfRoute, routeLabel } from './apps.js';
 
 const user = getCurrentUser();
 
-// Rutas visibles por rol (ver apps.js). Todos aterrizan en Inicio, la
-// pantalla de aplicaciones (como el inicio de Odoo).
+// Rutas visibles por rol (ver apps.js). Todos aterrizan en Inicio.
 const allowedRoutes = ROUTES_BY_ROLE[user?.role] || ROUTES_BY_ROLE.asesor;
 const DEFAULT_ROUTE = 'inicio';
 
 const ROLE_LABELS = { admin: 'Dueño / Admin', coordinador: 'Coordinador', asesor: 'Asesor', produccion: 'Producción' };
-const sidebarFoot = document.querySelector('#sidebar > div:last-child');
+const sidebarFoot = document.getElementById('sidebar-foot');
 if (sidebarFoot && user) {
   sidebarFoot.innerHTML = `
-    <div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-on-surface-variant shrink-0">${escapeHtml((user.username || '?').slice(0, 1).toUpperCase())}</div>
+    <div class="w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center text-[12px] font-semibold text-on-surface-variant shrink-0">${escapeHtml((user.username || '?').slice(0, 1).toUpperCase())}</div>
     <div class="min-w-0 flex-1">
-      <p class="text-label-bold font-label-bold truncate">${escapeHtml(user.username)}</p>
-      <p class="text-body-sm font-body-sm text-on-surface-variant truncate">${escapeHtml(ROLE_LABELS[user.role] || user.role)}</p>
+      <p class="text-[13px] font-medium text-on-surface truncate">${escapeHtml(user.username)}</p>
+      <p class="text-[11.5px] text-on-surface-variant truncate">${escapeHtml(ROLE_LABELS[user.role] || user.role)}</p>
     </div>
-    <button id="logout-btn" type="button" aria-label="Cerrar sesión" class="p-2 text-on-surface-variant hover:text-error transition-colors shrink-0" title="Cerrar sesión">
-      <span class="material-symbols-outlined text-[20px]">logout</span>
+    <button id="logout-btn" type="button" aria-label="Cerrar sesión" class="btn btn-icon shrink-0" title="Cerrar sesión">
+      <span class="material-symbols-outlined">logout</span>
     </button>
   `;
   sidebarFoot.querySelector('#logout-btn').addEventListener('click', logout);
-}
-const topbarUser = document.getElementById('topbar-user');
-if (topbarUser && user) {
-  topbarUser.innerHTML = `
-    <div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-body-sm text-on-surface-variant shrink-0" title="${escapeHtml(`${user.username} · ${ROLE_LABELS[user.role] || user.role}`)}">${escapeHtml((user.username || '?').slice(0, 1).toUpperCase())}</div>
-    <button type="button" aria-label="Cerrar sesión" class="p-2 text-on-surface-variant hover:text-error transition-colors" title="Cerrar sesión">
-      <span class="material-symbols-outlined text-[20px]">logout</span>
-    </button>`;
-  topbarUser.querySelector('button').addEventListener('click', logout);
 }
 
 // Menu lateral ocultable: libera espacio horizontal en pantallas chicas o
@@ -63,20 +53,16 @@ function readCollapsed() {
 }
 
 let sidebarCollapsed = readCollapsed();
-// En Inicio no hay menú lateral: las tarjetas de aplicaciones ya son la
-// navegación, y un menú con los mismos destinos sobra. render() lo marca.
-let onHome = false;
 
+// El menú es parte de la ventana: en escritorio está siempre (salvo que lo
+// ocultes con el botón); en teléfono se abre encima y se cierra al elegir.
 function applySidebar() {
   const mobile = mobileQuery.matches;
-  const hidden = onHome || (mobile ? !mobileSidebarOpen : sidebarCollapsed);
-  sidebarEl.classList.toggle('-translate-x-full', hidden);
-  sidebarEl.classList.toggle('invisible', onHome);
+  const hidden = mobile ? !mobileSidebarOpen : sidebarCollapsed;
+  sidebarEl.classList.toggle('-translate-x-full', mobile && hidden);
+  sidebarEl.classList.toggle('lg:hidden', !mobile && hidden);
   sidebarEl.classList.toggle('shadow-xl', mobile && mobileSidebarOpen);
-  mainColEl.classList.toggle('lg:ml-[252px]', !onHome && !sidebarCollapsed);
-  sidebarToggleBtn.classList.toggle('hidden', onHome);
-  topbarUser?.classList.toggle('hidden', !onHome);
-  topbarUser?.classList.toggle('flex', onHome);
+  mainColEl.classList.toggle('lg:ml-1.5', !mobile && hidden);
   sidebarBackdrop?.classList.toggle('hidden', !(mobile && mobileSidebarOpen));
   sidebarToggleBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
 }
@@ -168,14 +154,12 @@ const navList = document.getElementById('nav-list');
 const toastRoot = document.getElementById('toast-root');
 
 function toast(message, kind = 'info') {
-  const kindClasses = {
-    info: 'bg-inverse-surface text-inverse-on-surface',
-    success: 'bg-secondary text-on-secondary',
-    error: 'bg-error text-on-error',
-  };
+  // Aviso flotante blanco con un punto de color (no bloques de color llenos).
+  const dot = { info: 'bg-outline', success: 'bg-status-good', error: 'bg-error' };
   const el = document.createElement('div');
-  el.className = `px-4 py-3 rounded-lg shadow-lg text-sm font-semibold max-w-xs ${kindClasses[kind] || kindClasses.info}`;
-  el.textContent = message;
+  el.className = 'flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface text-on-surface text-[13px] max-w-xs shadow-[var(--shadow-pop)]';
+  el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full shrink-0 ${dot[kind] || dot.info}"></span><span></span>`;
+  el.lastChild.textContent = message;
   toastRoot.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
@@ -193,37 +177,27 @@ const ctx = {
   routeParams: new URLSearchParams(),
 };
 
-// Menú lateral: solo existe dentro de una aplicación y muestra sus
-// pantallas (como Odoo), con un enlace para volver a Inicio. En Inicio se
-// oculta (ver applySidebar).
-function renderSidebar(route, app) {
+// Menú lateral único con todo junto (NAV en apps.js): grupos con rótulo
+// gris y un ícono por pantalla, como la referencia. Solo salen las
+// pantallas que el rol puede ver.
+function renderSidebar(route) {
   const linkCls = (active) =>
-    `nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-      active ? 'bg-surface-container-high text-on-surface font-bold shadow-[inset_3px_0_0_var(--c-primary)]' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+    `nav-link flex items-center gap-2.5 px-2.5 h-8 rounded-lg text-[13px] transition-colors ${
+      active ? 'bg-surface-container-high text-on-surface font-medium' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
     }`;
-  const homeLink = `
-    <li><a href="#/inicio" data-route="inicio" class="${linkCls(false)}">
-      <span class="material-symbols-outlined text-[20px]">apps</span><span class="text-label-bold font-label-bold">Inicio</span></a></li>`;
-
-  if (!app) {
-    navList.innerHTML = '';
-    return;
-  }
-
-  const items = app.routes.filter(([r]) => allowedRoutes.includes(r));
-  navList.innerHTML = `
-    ${homeLink}
-    <li class="px-3 pt-4 pb-2 flex items-center gap-2">
-      <span class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-surface-container-high text-on-surface"><span class="material-symbols-outlined text-[20px]">${app.icon}</span></span>
-      <span class="text-body-md font-bold text-on-surface truncate">${escapeHtml(app.label)}</span>
-    </li>
-    ${items
-      .map(
-        ([r, label]) => `
-      <li><a href="#/${r}" data-route="${r}" class="${linkCls(r === route)} text-body-sm"${r === route ? ' aria-current="page"' : ''}>${escapeHtml(label)}</a></li>`
-      )
-      .join('')}
-  `;
+  navList.innerHTML = NAV.map((group) => {
+    const items = group.items.filter(([r]) => allowedRoutes.includes(r));
+    if (!items.length) return '';
+    return `
+      ${group.label ? `<li class="px-2.5 pt-5 pb-1.5 text-[11.5px] text-outline">${escapeHtml(group.label)}</li>` : ''}
+      ${items
+        .map(
+          ([r, label, icon]) => `
+        <li><a href="#/${r}" data-route="${r}" class="${linkCls(r === route)}"${r === route ? ' aria-current="page"' : ''}>
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">${icon}</span>${escapeHtml(label)}</a></li>`
+        )
+        .join('')}`;
+  }).join('');
 }
 
 // Tocar un enlace del menú en teléfono lo cierra (también si es la misma
@@ -241,14 +215,13 @@ async function render() {
   ctx.routeParams = new URLSearchParams(route === hashRoute ? hashQuery : '');
 
   const app = appOfRoute(route);
-  renderSidebar(route, app);
-  onHome = !app;
+  renderSidebar(route);
   mobileSidebarOpen = false;
   applySidebar();
 
   const title = routeLabel(route);
   pageTitle.innerHTML = app
-    ? `<a href="#/${app.firstRoute}" class="font-normal text-on-surface-variant hover:text-on-surface">${escapeHtml(app.label)} ›</a> ${escapeHtml(title)}`
+    ? `<span class="text-outline">${escapeHtml(app.label)}</span> <span class="text-outline">/</span> ${escapeHtml(title)}`
     : escapeHtml(title);
   document.title = `${title} · Velara CRM`;
 
@@ -279,10 +252,10 @@ render();
 const connDot = document.getElementById('conn-dot');
 ws.on('__status', (status) => {
   if (status === 'online') {
-    connDot.className = 'w-2 h-2 rounded-full bg-secondary ml-1';
+    connDot.className = 'w-1.5 h-1.5 rounded-full bg-status-good ml-1';
     connDot.title = 'En vivo';
   } else {
-    connDot.className = 'w-2 h-2 rounded-full bg-error ml-1';
+    connDot.className = 'w-1.5 h-1.5 rounded-full bg-error ml-1';
     connDot.title = 'Reconectando…';
   }
 });

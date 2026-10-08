@@ -5,6 +5,65 @@ body {
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
+  /* Variantes de Inter más limpias y cifras de ancho fijo (las columnas de
+     montos quedan alineadas). */
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Estética Shakuro: pesos medios en vez de negritas pesadas. Las vistas
+   usan font-bold en cientos de sitios; aquí se suaviza en un solo lugar. */
+#view-root .font-bold,
+#nova-modal-body .font-bold { font-weight: 600; }
+#view-root .font-extrabold { font-weight: 650; }
+
+/* Rótulos de campo en minúscula normal, chicos y grises (las vistas los
+   escriben con uppercase + tracking; aquí se neutraliza en un solo lugar). */
+#view-root label.uppercase,
+#nova-modal-body label.uppercase,
+#auth-overlay label.uppercase {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12.5px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--c-on-surface-variant);
+}
+#view-root label.uppercase::first-letter,
+#nova-modal-body label.uppercase::first-letter { text-transform: uppercase; }
+
+/* Tablas: encabezados chicos y grises, filas con separador de 1px y hover
+   muy suave, sin rayado ni fondos de color. */
+#view-root thead th,
+#nova-modal-body thead th {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--c-outline);
+  background: transparent;
+}
+#view-root tbody tr { transition: background-color 120ms ease-out; }
+#view-root tbody tr:hover { background: var(--c-surface-container-low); }
+#view-root td { border-color: var(--c-outline-variant); }
+
+/* Sombras de tarjeta: casi nada. Las vistas usan shadow-sm/shadow; se
+   aplanan para que el borde de 1px haga el trabajo. */
+#view-root .shadow-sm,
+#view-root .shadow { box-shadow: none; }
+
+/* Entradas de los paneles flotantes (sin fondo oscuro detrás). */
+@keyframes nova-panel-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nova-pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nova-panel-in { animation: nova-panel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .nova-pop-in { animation: nova-pop-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 }
 
 .material-symbols-outlined {

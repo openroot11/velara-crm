@@ -1,11 +1,15 @@
 let openModalCount = 0;
 
-export function openModal({ title, render, wide = false }) {
+// Nada de ventanas con fondo oscuro (estilo Odoo): el contenido se abre en
+// un panel flotante pegado a la derecha, con la pantalla de detrás visible
+// y sin atenuar (como la ficha de contacto de Shakuro). variant 'center' =
+// tarjeta chica centrada, para confirmaciones de una línea.
+export function openModal({ title, render, wide = false, variant = 'panel' }) {
   const modalId = `nova-modal-title-${++openModalCount}`;
   const previouslyFocused = document.activeElement;
 
   const overlay = document.createElement('div');
-  overlay.className = 'fixed inset-0 z-[90] bg-black/40 flex items-center justify-center p-4';
+  overlay.className = `fixed inset-0 z-[90] ${variant === 'center' ? 'flex items-center justify-center p-4' : ''}`;
   // role="dialog"/aria-modal: sin esto un lector de pantalla sigue anunciando
   // el resto de la pagina detras del modal como si fuera navegable.
   overlay.setAttribute('role', 'dialog');
@@ -13,15 +17,18 @@ export function openModal({ title, render, wide = false }) {
   overlay.setAttribute('aria-labelledby', modalId);
 
   const box = document.createElement('div');
-  box.className = `bg-surface rounded-xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`;
+  box.className =
+    variant === 'center'
+      ? 'nova-pop-in bg-surface rounded-2xl shadow-[var(--shadow-pop)] w-full max-w-sm max-h-[90vh] overflow-y-auto'
+      : `nova-panel-in absolute top-2 right-2 bottom-2 w-[calc(100%-1rem)] ${wide ? 'sm:w-[640px]' : 'sm:w-[440px]'} bg-surface rounded-2xl shadow-[var(--shadow-pop)] flex flex-col overflow-hidden`;
   box.innerHTML = `
-    <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant">
-      <h3 id="${modalId}" class="text-headline-sm font-headline-sm font-bold text-on-surface">${title}</h3>
-      <button id="nova-modal-close" type="button" aria-label="Cerrar" class="btn btn-icon -mr-2">
+    <div class="flex items-center justify-between gap-3 pl-5 pr-3 h-14 border-b border-outline-variant shrink-0">
+      <h3 id="${modalId}" class="text-[14px] font-semibold text-on-surface truncate">${title}</h3>
+      <button id="nova-modal-close" type="button" aria-label="Cerrar" class="btn btn-icon">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
-    <div id="nova-modal-body" class="p-6"></div>
+    <div id="nova-modal-body" class="p-5 ${variant === 'center' ? '' : 'flex-1 overflow-y-auto'}"></div>
   `;
   overlay.appendChild(box);
   document.body.appendChild(overlay);
@@ -74,9 +81,10 @@ export function confirmModal({ title, message, confirmLabel = 'Confirmar', dange
 
     const close = openModal({
       title,
+      variant: 'center',
       render: (body, { close: closeModal }) => {
         body.innerHTML = `
-          <p class="text-body-md font-body-md text-on-surface-variant mb-4">${message}</p>
+          <p class="text-body-md font-body-md text-on-surface-variant mb-5">${message}</p>
           ${requirePhrase ? `
             <label for="nova-confirm-input" class="block text-label-bold font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">
               Escribe <span class="text-error">${requirePhrase}</span> para confirmar

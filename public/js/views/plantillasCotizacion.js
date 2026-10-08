@@ -86,7 +86,7 @@ export async function mount(container, ctx) {
   container.innerHTML = `
     <div class="mb-gutter flex justify-between items-end flex-wrap gap-gutter">
       <div>
-        <h2 class="text-headline-lg font-headline-lg text-on-surface mb-base">Plantillas y tarifas</h2>
+        <h2 class="text-headline-lg font-headline-lg text-on-surface mb-base">Políticas y tarifas</h2>
         <p class="text-body-md font-body-md text-on-surface-variant">Lo que usan las plantillas de cotización para sugerir precios. Cambie una tarifa cuando suban los costos: aplica para todo el equipo.</p>
       </div>
       <div class="flex gap-2" id="pt-actions"></div>

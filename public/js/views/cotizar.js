@@ -126,19 +126,18 @@ function field(id, label, value, opts = {}) {
     </div>`;
 }
 
-// Tarjeta de un paso numerado (1 Cliente / 2 Servicio / 3 Detalle / 4 Notas)
-// -- mismo gesto visual en las 4, círculo con el número en acento.
+// Tarjeta de un paso (1 Cliente / 2 Servicio / 3 Detalle / 4 Notas): solo
+// número y título, sin ícono ni subtítulo de ayuda (minimalismo). `icon` y
+// `desc` se siguen recibiendo para no tocar cada llamada, pero no se pintan.
 function stepCard(number, icon, title, desc, innerHtml, extraHeaderHtml = '') {
+  void icon;
+  void desc;
   return `
-    <div class="bg-surface rounded-xl border border-outline-variant shadow-sm p-5">
-      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div class="flex items-center gap-3">
-          <span class="w-7 h-7 rounded-full bg-on-surface text-surface flex items-center justify-center text-body-sm font-bold shrink-0">${number}</span>
-          <div>
-            <h3 class="text-body-md font-body-md font-bold text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px] text-on-surface-variant">${icon}</span>${title}</h3>
-            ${desc ? `<p class="text-[11px] text-on-surface-variant">${desc}</p>` : ''}
-          </div>
-        </div>
+    <div class="bg-surface rounded-xl border border-outline-variant p-5">
+      <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <h3 class="text-[14px] font-semibold text-on-surface flex items-center gap-2">
+          <span class="text-outline font-medium tabular-nums">${number}</span>${title}
+        </h3>
         ${extraHeaderHtml}
       </div>
       ${innerHtml}
@@ -148,10 +147,6 @@ function stepCard(number, icon, title, desc, innerHtml, extraHeaderHtml = '') {
 
 export async function mount(container, ctx) {
   container.innerHTML = `
-    <div class="mb-gutter">
-      <h2 class="text-headline-lg font-headline-lg text-on-surface mb-base">Nueva cotización</h2>
-      <p class="text-body-md font-body-md text-on-surface-variant">Busque un cliente (o registre uno nuevo), elija el servicio y arme la cotización. Use una plantilla para calcular carpas, forros o productos especiales.</p>
-    </div>
     <div id="cz-root"></div>
   `;
   const root = container.querySelector('#cz-root');
@@ -287,7 +282,7 @@ export async function mount(container, ctx) {
     const service = findService(selectedServiceSlug);
     const editable = isEditable();
     if (!service) {
-      wrap.innerHTML = `<p class="text-[12px] text-on-surface-variant md:col-span-3">Elige un servicio para ver sus campos.</p>`;
+      wrap.innerHTML = '';
       return;
     }
     wrap.innerHTML = service.fields
@@ -601,16 +596,6 @@ export async function mount(container, ctx) {
       </div>`;
   }
 
-  function quickNotes() {
-    const notes = templateConfig?.observaciones || [];
-    if (!notes.length) return '';
-    return `<div class="flex flex-wrap gap-1.5 mt-2">${notes
-      .map(
-        (n) => `<button type="button" data-quick-note="${escapeHtml(n)}" class="px-2 py-1 rounded-full border border-outline-variant text-[11px] text-on-surface-variant hover:bg-surface-container-low">+ ${escapeHtml(n)}</button>`
-      )
-      .join('')}</div>`;
-  }
-
   // Agrega las líneas que devolvió una plantilla. Quita la fila vacía del
   // arranque y, si aún no hay servicio elegido, toma el de la plantilla y
   // llena sus campos vacíos con lo calculado (tipo, medidas…).
@@ -854,8 +839,7 @@ export async function mount(container, ctx) {
                  <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant pointer-events-none">search</span>
                  <input id="cz-search" type="text" autocomplete="off" placeholder="Buscar por nombre, teléfono o documento…" class="w-full pl-10 pr-3 py-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
                  <div id="cz-results" class="hidden absolute z-20 mt-1 w-full bg-surface border border-outline-variant rounded-md shadow-lg max-h-72 overflow-y-auto"></div>
-               </div>
-               <p class="text-[11px] text-on-surface-variant mb-3">¿No aparece? Llena los datos de abajo para registrarlo.</p>`
+               </div>`
             : ''
         }
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1000,8 +984,6 @@ export async function mount(container, ctx) {
                </div>`
             : ''
         }
-
-        <p class="mt-4 text-[11px] text-on-surface-variant flex items-start gap-1"><span class="material-symbols-outlined text-[14px] shrink-0">info</span>Esta cotización se guarda en Velara CRM y no genera un pedido automáticamente.</p>
       </div>
     `;
   }
@@ -1046,9 +1028,7 @@ export async function mount(container, ctx) {
   function render() {
     root.innerHTML = `
       <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <div class="flex items-center gap-2 text-body-sm text-on-surface-variant min-w-0">
-          <span class="font-bold text-on-surface truncate">${quotation ? escapeHtml(quotation.number) : 'Nueva cotización'}</span>
-        </div>
+        <h2 class="text-headline-lg font-headline-lg text-on-surface truncate min-w-0">${quotation ? escapeHtml(quotation.number) : 'Nueva cotización'}</h2>
         <div class="flex flex-wrap gap-2" id="cz-actions"></div>
       </div>
 
@@ -1087,13 +1067,11 @@ export async function mount(container, ctx) {
                   'Incluya información adicional, tiempos de entrega o condiciones.',
                   `<label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Observaciones</label>
                    <textarea id="cz-note" rows="3" placeholder="Opcional — se incluye en el PDF de la cotización" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20">${escapeHtml(quotation?.note || '')}</textarea>
-                   ${quickNotes()}
                    <div class="flex items-end justify-between gap-2 mt-4 mb-1 flex-wrap">
                      <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant">Condiciones (una por línea)</label>
                      <button type="button" id="cz-terms-reset" class="btn btn-ghost text-[11px] ${quotation?.terms ? '' : 'hidden'}"><span class="material-symbols-outlined">restart_alt</span>Usar las de siempre</button>
                    </div>
-                   <textarea id="cz-terms" rows="7" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-[12px] resize-y">${escapeHtml(quotation?.terms || '')}</textarea>
-                   <p class="text-[11px] text-on-surface-variant mt-1">Cámbielas solo para esta cotización. La línea de vigencia ("válida hasta…") la agrega el PDF. Las de siempre se editan en Ajustes y en Plantillas y tarifas.</p>`
+                   <textarea id="cz-terms" rows="7" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-[12px] resize-y">${escapeHtml(quotation?.terms || '')}</textarea>`
                 )
               : quotation.note
                 ? stepCard(4, 'sticky_note_2', 'Notas y condiciones', '', `<p class="text-body-sm text-on-surface-variant whitespace-pre-line">${escapeHtml(quotation.note)}</p>`)
@@ -1138,13 +1116,6 @@ export async function mount(container, ctx) {
     wireTemplateBar(list);
     wireImages();
     wireTerms();
-    root.querySelectorAll('[data-quick-note]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const ta = root.querySelector('#cz-note');
-        if (!ta) return;
-        ta.value = (ta.value.trim() ? `${ta.value.trim()}\n` : '') + btn.dataset.quickNote;
-      });
-    });
 
     renderTotals();
     renderSummaryActions();

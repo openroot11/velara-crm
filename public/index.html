@@ -30,33 +30,40 @@
      principal, filetes, el total), nunca el color dominante.
      Modo claro (por defecto). Los tokens "fixed" de Material 3 no viven
      aquí -- por definición no cambian entre claro/oscuro (ver tailwind-config). */
+  /* Estética "Shakuro CRM": la app es una ventana blanca de esquinas
+     suaves apoyada sobre un fondo gris claro (--c-shell), con el menú
+     lateral sobre ese mismo gris, bordes de 1px casi invisibles, texto de
+     13px y botones principales en negro. El rojo de marca queda como
+     acento puntual (--c-accent), no como color de botón. */
   :root {
+    --c-backdrop: #E6E6EB;
+    --c-shell: #F7F7F8;
+    --c-accent: #D71920;
     --c-surface: #ffffff;
     --c-surface-container-lowest: #ffffff;
-    --c-surface-container-low: #F8F7F3;
-    --c-surface-container: #F2F0EA;
-    --c-surface-container-high: #E9E6DE;
-    --c-surface-container-highest: #DDD9CF;
-    --c-surface-variant: #E9E6DE;
-    --c-surface-dim: #E9E6DE;
+    --c-surface-container-low: #F7F7F8;
+    --c-surface-container: #F3F3F4;
+    --c-surface-container-high: #ECECEE;
+    --c-surface-container-highest: #E4E4E7;
+    --c-surface-variant: #ECECEE;
+    --c-surface-dim: #ECECEE;
     --c-surface-bright: #ffffff;
-    --c-background: #F8F7F3;
-    --c-on-surface: #0B0B0B;
-    --c-on-surface-variant: #5E6064;
-    --c-on-background: #0B0B0B;
-    --c-outline: #8E9094;
-    --c-outline-variant: #E2E0DB;
-    --c-inverse-surface: #252525;
-    --c-inverse-on-surface: #F2F0EA;
+    --c-background: #ffffff;
+    --c-on-surface: #18181B;
+    --c-on-surface-variant: #6B6B73;
+    --c-on-background: #18181B;
+    --c-outline: #A1A1AA;
+    --c-outline-variant: #EBEBED;
+    --c-inverse-surface: #18181B;
+    --c-inverse-on-surface: #FAFAFA;
 
-    --c-primary: #D71920;
+    --c-primary: #18181B;
     --c-on-primary: #ffffff;
-    --c-primary-container: #FBE3E4;
-    --c-on-primary-container: #7F0E12;
-    --c-inverse-primary: #F0565B;
-    --c-surface-tint: #B3141A;
-    /* Hover del boton principal: rojo profundo de marca (accent.deep). */
-    --c-primary-hover: #B3141A;
+    --c-primary-container: #F3F3F4;
+    --c-on-primary-container: #18181B;
+    --c-inverse-primary: #FAFAFA;
+    --c-surface-tint: #18181B;
+    --c-primary-hover: #000000;
     /* Relleno de checkbox/radio marcados: neutro (el rojo es solo para
        logo, boton principal y filetes). */
     --c-check: #0B0B0B;
@@ -78,10 +85,15 @@
     --c-error-container: #FDE4E1;
     --c-on-error-container: #7A1410;
 
-    --c-status-good: #0ca30c;
-    --c-status-warning: #fab219;
+    --c-status-good: #1F9D55;
+    --c-status-warning: #E0A100;
     --c-status-serious: #B8791A;
     --c-status-critical: #B42318;
+
+    /* Sombras de "ventana": muy difusas, nunca un fondo oscuro detrás. */
+    --shadow-app: 0 30px 60px -20px rgba(16, 16, 30, 0.18), 0 2px 6px rgba(16, 16, 30, 0.05);
+    --shadow-window: 0 1px 2px rgba(16, 16, 20, 0.04), 0 8px 24px -6px rgba(16, 16, 20, 0.06);
+    --shadow-pop: 0 0 0 1px rgba(16, 16, 20, 0.06), 0 12px 32px -4px rgba(16, 16, 20, 0.14), 0 2px 6px rgba(16, 16, 20, 0.05);
   }
 
   /* Modo oscuro: superficies en negro carbón y grafito, texto en blanco
@@ -90,31 +102,37 @@
      se lea sobre negro. */
   :root.dark,
   .theme-ink {
-    --c-surface: #141414;
-    --c-surface-container-lowest: #0F0F0F;
-    --c-surface-container-low: #1B1B1B;
-    --c-surface-container: #212121;
-    --c-surface-container-high: #292929;
-    --c-surface-container-highest: #333333;
-    --c-surface-variant: #333333;
-    --c-surface-dim: #0B0B0B;
-    --c-surface-bright: #3A3A3A;
-    --c-background: #0B0B0B;
-    --c-on-surface: #F2F0EA;
-    --c-on-surface-variant: #A7A9AC;
-    --c-on-background: #F2F0EA;
-    --c-outline: #77797D;
-    --c-outline-variant: #2E2E2E;
-    --c-inverse-surface: #F2F0EA;
-    --c-inverse-on-surface: #0B0B0B;
+    --c-backdrop: #050506;
+    --c-shell: #111113;
+    --c-accent: #E3212A;
+    --c-surface: #161618;
+    --c-surface-container-lowest: #161618;
+    --c-surface-container-low: #1C1C1F;
+    --c-surface-container: #212124;
+    --c-surface-container-high: #28282C;
+    --c-surface-container-highest: #313136;
+    --c-surface-variant: #313136;
+    --c-surface-dim: #0C0C0E;
+    --c-surface-bright: #3A3A3F;
+    --c-background: #161618;
+    --c-on-surface: #F4F4F5;
+    --c-on-surface-variant: #A1A1AA;
+    --c-on-background: #F4F4F5;
+    --c-outline: #71717A;
+    --c-outline-variant: #2A2A2E;
+    --c-inverse-surface: #F4F4F5;
+    --c-inverse-on-surface: #18181B;
 
-    --c-primary: #E3212A;
-    --c-on-primary: #ffffff;
-    --c-primary-container: #4A0F12;
-    --c-on-primary-container: #FBE3E4;
-    --c-inverse-primary: #D71920;
-    --c-surface-tint: #F0565B;
-    --c-primary-hover: #C41A21;
+    --c-primary: #F4F4F5;
+    --c-on-primary: #18181B;
+    --c-primary-container: #28282C;
+    --c-on-primary-container: #F4F4F5;
+    --c-inverse-primary: #18181B;
+    --c-surface-tint: #F4F4F5;
+    --c-primary-hover: #ffffff;
+    --shadow-window: 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-app: 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+    --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 40px -4px rgba(0, 0, 0, 0.6);
     --c-check: #A7A9AC;
 
     --c-secondary: #8AC0F5;
@@ -138,18 +156,15 @@
     --c-status-critical: #FF6E6E;
   }
 
-  /* El menú lateral va siempre en negro carbón, como el encabezado y el pie
-     del sitio web (.theme-ink arriba). En modo oscuro se separa del fondo
-     con un tono un poco más claro. */
-  #sidebar.theme-ink {
-    --c-surface: #0B0B0B;
-    --c-surface-container-low: #181818;
-    --c-surface-container-high: #222222;
-    --c-outline-variant: #222222;
-    color: var(--c-on-surface);
+  /* El menú lateral vive sobre el gris del fondo (no es una barra negra):
+     sus estados hover/activo usan grises un paso más oscuros que ese fondo. */
+  #sidebar {
+    --c-surface-container-low: #EEEEF0;
+    --c-surface-container-high: #E8E8EB;
   }
-  :root.dark #sidebar.theme-ink {
-    --c-surface: #111111;
+  :root.dark #sidebar {
+    --c-surface-container-low: #1A1A1D;
+    --c-surface-container-high: #222226;
   }
 </style>
 <script>
@@ -235,16 +250,24 @@
           // badges de SLA, acciones prioritarias y tablero Kanban -- no se
           // usa para series de graficas (esas usan la paleta categorica ya
           // validada, ver components/colombiaMap.js PRODUCT_COLORS).
+          shell: 'var(--c-shell)',
+          backdrop: 'var(--c-backdrop)',
+          accent: 'var(--c-accent)',
           'status-good': 'var(--c-status-good)',
           'status-warning': 'var(--c-status-warning)',
           'status-serious': 'var(--c-status-serious)',
           'status-critical': 'var(--c-status-critical)',
         },
+        // Esquinas suaves y consistentes: campos y botones 8px, tarjetas
+        // 12px, ventana principal y paneles 16px.
         borderRadius: {
-          DEFAULT: '0.125rem',
-          lg: '0.25rem',
-          xl: '0.5rem',
-          full: '0.75rem',
+          sm: '4px',
+          DEFAULT: '6px',
+          md: '8px',
+          lg: '8px',
+          xl: '12px',
+          '2xl': '16px',
+          full: '9999px',
         },
         spacing: {
           'margin-desktop': '24px',
@@ -268,13 +291,16 @@
           caption: ['Inter', 'system-ui', 'sans-serif'],
         },
         fontSize: {
-          'headline-lg': ['30px', { lineHeight: '38px', letterSpacing: '-0.02em', fontWeight: '700' }],
-          'headline-md': ['24px', { lineHeight: '32px', letterSpacing: '-0.015em', fontWeight: '700' }],
-          'headline-sm': ['20px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '700' }],
-          'body-sm': ['12px', { lineHeight: '16px', fontWeight: '400' }],
-          'label-bold': ['11px', { lineHeight: '12px', letterSpacing: '0.05em', fontWeight: '700' }],
-          'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }],
-          'display-kpi': ['48px', { lineHeight: '56px', letterSpacing: '-0.03em', fontWeight: '700' }],
+          // Escala compacta tipo Shakuro: interfaz en 13px, títulos en
+          // peso 600 (no negrita pesada) y cifras grandes con tracking
+          // negativo.
+          'headline-lg': ['26px', { lineHeight: '34px', letterSpacing: '-0.025em', fontWeight: '600' }],
+          'headline-md': ['21px', { lineHeight: '28px', letterSpacing: '-0.02em', fontWeight: '600' }],
+          'headline-sm': ['16px', { lineHeight: '24px', letterSpacing: '-0.01em', fontWeight: '600' }],
+          'body-sm': ['12.5px', { lineHeight: '18px', fontWeight: '400' }],
+          'label-bold': ['11px', { lineHeight: '14px', letterSpacing: '0.03em', fontWeight: '600' }],
+          'body-md': ['13.5px', { lineHeight: '20px', fontWeight: '400' }],
+          'display-kpi': ['36px', { lineHeight: '42px', letterSpacing: '-0.03em', fontWeight: '500' }],
           // "label" = misma metrica que label-bold (mismo uso: eyebrows y
           // encabezados de columna en mayuscula) pero peso medio en vez de
           // negrita, para cuando la negrita compite demasiado con el resto.
@@ -319,6 +345,10 @@
       background-color: var(--c-surface-container-lowest);
       color: var(--c-on-surface);
       border-color: var(--c-outline-variant);
+      /* Misma escala que la interfaz (el plugin los deja en 16px). */
+      font-size: 13.5px;
+      line-height: 20px;
+      border-radius: 8px;
     }
     [type='text']:focus, input:where(:not([type])):focus, [type='email']:focus, [type='url']:focus,
     [type='password']:focus, [type='number']:focus, [type='date']:focus, [type='datetime-local']:focus,
@@ -355,29 +385,29 @@
 
   @layer components {
     /* Gesto firma de la marca: filete rojo corto bajo un título. */
-    .rule-under { display: block; width: 2.5rem; height: 3px; background: var(--c-primary); }
-    /* Versalitas espaciadas (encabezados de sección, como la papelería). */
-    .eyebrow { font-size: 11px; line-height: 1; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+    .rule-under { display: block; width: 2rem; height: 2px; background: var(--c-accent); }
+    /* Rótulo de sección: chico, gris, sin gritar (como "Work" / "Team"). */
+    .eyebrow { font-size: 11.5px; line-height: 1; font-weight: 500; letter-spacing: 0.01em; color: var(--c-outline); }
 
     .btn {
-      @apply relative inline-flex items-center justify-center gap-2 rounded-[9999px] px-[18px] py-2
-             text-[12.5px] leading-[16px] font-semibold tracking-[0.01em] font-label-bold whitespace-nowrap select-none
+      @apply relative inline-flex items-center justify-center gap-1.5 rounded-lg px-3 h-8
+             text-[13px] leading-[16px] font-medium whitespace-nowrap select-none
              transition-colors duration-150 ease-out
              disabled:opacity-45 disabled:cursor-not-allowed disabled:pointer-events-none
-             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-outline focus-visible:ring-offset-2 focus-visible:ring-offset-surface;
+             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-outline focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
     }
-    .btn .material-symbols-outlined { @apply text-[18px]; }
+    .btn .material-symbols-outlined { @apply text-[17px]; }
 
-    /* Primary: accion principal de la pantalla/formulario -- una sola por vista. */
+    /* Primary: accion principal de la pantalla/formulario -- una sola por vista. Negro, como "New Contact". */
     .btn-primary {
-      @apply bg-primary text-on-primary shadow-sm
+      @apply bg-primary text-on-primary
              hover:bg-primary-hover active:brightness-90;
     }
     /* Secondary: accion alterna, no destructiva -- mismo patron "tonal
        outline" que ya usaban SLA/Seguimiento a mano (bg-surface-container-
        lowest + border + hover primary/10), ahora formalizado. */
     .btn-secondary {
-      @apply bg-surface-container-lowest text-on-surface border border-outline-variant
+      @apply bg-surface text-on-surface border border-outline-variant shadow-[0_1px_1px_rgba(16,16,20,0.04)]
              hover:bg-surface-container-low active:bg-surface-container-high;
     }
     /* Tertiary/Ghost: accion de bajo enfasis (cancelar, ver mas) -- sin relleno ni borde. */
@@ -387,17 +417,17 @@
     }
     /* Destructive: borra/revierte algo -- rojo, solo para esa accion. */
     .btn-destructive {
-      @apply bg-error text-on-error shadow-sm
+      @apply bg-error text-on-error
              hover:bg-error/90 active:brightness-90;
     }
     /* Icon button: solo icono, sin texto -- SIEMPRE con aria-label (el icono
-       solo no es un nombre accesible). Circular, mismo hover que el resto
-       de iconos de topbar/sidebar. */
+       solo no es un nombre accesible). Cuadrado suave, mismo hover que el
+       resto de iconos de topbar/sidebar. */
     .btn-icon {
-      @apply p-2 rounded-full bg-transparent text-on-surface-variant
-             hover:bg-surface-container-low hover:text-on-surface active:bg-surface-container-high;
+      @apply w-8 px-0 rounded-lg bg-transparent text-on-surface-variant
+             hover:bg-surface-container hover:text-on-surface active:bg-surface-container-high;
     }
-    .btn-icon .material-symbols-outlined { @apply text-[20px]; }
+    .btn-icon .material-symbols-outlined { @apply text-[19px]; }
 
     /* Loading: se activa con el atributo data-loading (no una clase, para
        poder alternarlo con dataset.loading = '' / delete sin tocar
@@ -436,65 +466,49 @@
 </style>
 <link rel="stylesheet" href="/css/brand.css" />
 </head>
-<body class="bg-background font-body-md text-on-background min-h-screen flex">
+<body class="bg-backdrop font-body-md text-on-background h-screen overflow-hidden antialiased lg:p-3">
 
-<!-- Sidebar -->
-<nav id="sidebar" aria-label="Menú principal" class="theme-ink fixed left-0 top-0 h-screen w-[252px] max-w-[85vw] bg-surface border-r border-outline-variant flex flex-col z-40 transition-transform duration-200 ease-in-out overflow-hidden">
-  <div class="relative px-6 pt-6 pb-5">
-    <!-- Logo oficial VELARA (versión negativa, sobre negro carbón). El
-         manual pide mínimo 120 px de ancho en pantalla. -->
-    <a href="#/inicio" class="block" aria-label="Velara, ir a Inicio">
-      <img src="/img/brand/logo-negativo.svg" alt="Velara" class="w-[150px] h-auto" />
-    </a>
-    <p class="eyebrow text-on-surface-variant mt-3 !text-[10px]">CRM del taller</p>
+<!-- Una sola ventana, como la referencia (Shakuro CRM): menú lateral y
+     contenido son la misma pieza, con esquinas suaves y sombra difusa sobre
+     un fondo gris. El menú usa el gris claro de la ventana; el contenido es
+     un panel blanco metido dentro con su propio borde. Solo el panel hace
+     scroll -- el menú queda quieto. -->
+<div id="app-window" class="relative flex h-full bg-shell lg:rounded-[18px] lg:border lg:border-outline-variant lg:shadow-[var(--shadow-app)] overflow-hidden">
+
+  <nav id="sidebar" aria-label="Menú principal" class="fixed lg:static inset-y-0 left-0 w-[232px] max-w-[85vw] shrink-0 bg-shell flex flex-col z-40 transition-transform duration-200 ease-in-out lg:translate-x-0">
+    <div class="px-5 pt-5 pb-4">
+      <!-- Logo oficial VELARA. El manual pide mínimo 120 px de ancho. -->
+      <a href="#/inicio" class="block" aria-label="Velara, ir a Inicio">
+        <img src="/img/brand/logo-positivo.svg" alt="Velara" class="w-[120px] h-auto dark:hidden" />
+        <img src="/img/brand/logo-negativo.svg" alt="Velara" class="w-[120px] h-auto hidden dark:block" />
+      </a>
+    </div>
+    <ul id="nav-list" class="flex-1 overflow-y-auto pb-2 px-3 space-y-px">
+      <!-- Lo llena app.js desde NAV (apps.js): todo junto, por grupos. -->
+    </ul>
+    <div id="sidebar-foot" class="px-4 py-4 flex items-center gap-2.5"></div>
+  </nav>
+
+  <!-- Fondo muy tenue detrás del menú cuando se abre en teléfono/tablet (app.js). -->
+  <div id="sidebar-backdrop" class="fixed inset-0 z-[35] bg-black/10 hidden" aria-hidden="true"></div>
+
+  <div id="main-col" class="flex-1 min-w-0 flex flex-col bg-surface lg:my-1.5 lg:mr-1.5 lg:rounded-xl lg:border lg:border-outline-variant overflow-hidden">
+    <header id="topbar" class="flex justify-between items-center gap-2 w-full h-12 px-margin-mobile sm:px-6 shrink-0 bg-surface border-b border-outline-variant">
+      <div class="flex items-center gap-2 min-w-0">
+        <button id="sidebar-toggle-btn" type="button" aria-label="Mostrar u ocultar el menú" aria-controls="sidebar" class="btn btn-icon -ml-2 shrink-0" title="Mostrar/ocultar menú">
+          <span class="material-symbols-outlined">dock_to_right</span>
+        </button>
+        <h2 id="page-title" class="text-[13.5px] font-medium text-on-surface truncate min-w-0">Velara CRM</h2>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button id="theme-toggle-btn" type="button" aria-label="Cambiar tema claro/oscuro" class="btn btn-icon" title="Cambiar a tema oscuro/claro">
+          <span id="theme-toggle-icon" class="material-symbols-outlined">dark_mode</span>
+        </button>
+        <span id="conn-dot" class="w-1.5 h-1.5 rounded-full bg-outline-variant ml-1" title="Conectando…"></span>
+      </div>
+    </header>
+    <main id="view-root" class="flex-1 min-w-0 overflow-y-auto p-margin-mobile sm:p-margin-desktop"></main>
   </div>
-  <ul id="nav-list" class="flex-1 overflow-y-auto py-2 px-3 space-y-0.5">
-    <!-- Lo llena app.js desde apps.js: en Inicio lista las aplicaciones; dentro
-         de una aplicación, solo sus pantallas (como Odoo). -->
-  </ul>
-  <!-- Franjas de marca a 47,4° (plata, plata clara, roja), saliendo del
-       borde superior, como en la papelería. Decorativas. -->
-  <svg class="absolute right-0 top-0 w-[92px] h-[60px] pointer-events-none" viewBox="60 0 240 160" preserveAspectRatio="xMaxYMin slice" aria-hidden="true">
-    <polygon points="20,0 80,0 264,200 204,200" fill="#252525"/>
-    <polygon points="100,0 160,0 344,200 284,200" fill="#1C1C1C"/>
-    <polygon points="180,0 210,0 394,200 364,200" fill="#D71920"/>
-  </svg>
-  <div class="relative p-5 border-t border-outline-variant flex items-center gap-3">
-    <div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-on-surface-variant shrink-0">A</div>
-    <div class="min-w-0">
-      <p class="text-label-bold font-label-bold truncate">Admin User</p>
-      <p class="text-body-sm font-body-sm text-on-surface-variant truncate">Operador Sr.</p>
-    </div>
-  </div>
-</nav>
-
-<!-- Main column -->
-<!-- Fondo oscuro detras del menu cuando se abre en telefono/tablet (app.js). -->
-<div id="sidebar-backdrop" class="fixed inset-0 z-[35] bg-black/40 hidden" aria-hidden="true"></div>
-
-<div id="main-col" class="flex-1 min-w-0 lg:ml-[252px] flex flex-col min-h-screen transition-[margin] duration-200 ease-in-out">
-  <header id="topbar" class="flex justify-between items-center gap-2 w-full h-16 px-margin-mobile sm:px-margin-desktop sticky top-0 z-30 bg-surface border-b border-outline-variant">
-    <div class="flex items-center gap-2 min-w-0">
-      <button id="sidebar-toggle-btn" type="button" aria-label="Mostrar u ocultar el menú" aria-controls="sidebar" class="p-2 -ml-2 shrink-0 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" title="Mostrar/ocultar menú">
-        <span class="material-symbols-outlined">menu</span>
-      </button>
-      <h2 id="page-title" class="text-headline-sm font-headline-sm font-bold text-on-surface truncate min-w-0">Velara CRM</h2>
-    </div>
-    <div class="flex items-center gap-4 shrink-0">
-      <!-- El buscador y la campana de notificaciones vivian aqui fijos en
-           todas las pantallas; ahora cada vista los monta donde le sirven
-           (hoy solo Ventas, ver ventas.js) para que este encabezado quede
-           limpio en el resto. -->
-      <button id="theme-toggle-btn" type="button" aria-label="Cambiar tema claro/oscuro" class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" title="Cambiar a tema oscuro/claro">
-        <span id="theme-toggle-icon" class="material-symbols-outlined text-[20px]">dark_mode</span>
-      </button>
-      <span id="conn-dot" class="w-2 h-2 rounded-full bg-outline-variant ml-1" title="Conectando…"></span>
-      <!-- Usuario y cerrar sesión: en Inicio no hay menú lateral, así que
-           van aquí (app.js lo muestra solo en Inicio). -->
-      <div id="topbar-user" class="hidden items-center gap-2 pl-3 border-l border-outline-variant"></div>
-    </div>
-  </header>
-  <main id="view-root" class="flex-1 min-w-0 p-margin-mobile sm:p-margin-desktop"></main>
 </div>
 
 <div id="toast-root" class="fixed bottom-4 right-4 left-4 sm:left-auto z-[100] flex flex-col items-end gap-2" role="status" aria-live="polite"></div>
