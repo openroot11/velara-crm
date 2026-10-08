@@ -430,7 +430,7 @@ export async function mount(container, ctx) {
         body.innerHTML = `
           ${fromQuote
             ? `<p class="text-body-sm text-on-surface mb-3">Se crea el trabajo con la cotización <b>${escapeHtml(lead.quotation.number || '')}</b> por <b>${formatMoney(lead.quotation.amount_total)}</b>.</p>`
-            : `<div class="mb-3"><label class="${labelCls}">Valor de la venta (con IVA)</label><input id="wn-amount" type="text" inputmode="numeric" value="${lead.amount || lead.quotation?.amount_total || ''}" class="${inputCls}" /></div>
+            : `<div class="mb-3"><label class="${labelCls}">Valor de la venta</label><input id="wn-amount" type="text" inputmode="numeric" value="${lead.amount || lead.quotation?.amount_total || ''}" class="${inputCls}" /></div>
                <div class="mb-3"><label class="${labelCls}">Qué hay que hacer</label><textarea id="wn-desc" rows="2" class="${inputCls}">${escapeHtml(lead.product || '')}</textarea></div>`}
           <div><label class="${labelCls}">Fecha de entrega prometida</label><input id="wn-date" type="date" class="${inputCls}" /></div>
           <div class="flex justify-end gap-2 mt-5"><button id="wn-cancel" class="btn btn-ghost">Cancelar</button><button id="wn-ok" class="btn btn-primary">Crear trabajo</button></div>`;

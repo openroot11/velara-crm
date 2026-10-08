@@ -57,17 +57,69 @@ function bindState(body, state, onChange) {
   });
 }
 
-function priceBox(line, area, perM2Label = 'm²') {
-  return `
+// Resultado de la plantilla: nombre, descripción y precio que se arman
+// solos con las opciones de arriba, pero que el asesor puede reescribir
+// aquí mismo. Lo que se escribe a mano ya no lo pisa el cálculo (hasta que
+// pulse "Volver al texto automático").
+function resultEditor(slot, { withPrice = true, perM2Label = 'm²' } = {}) {
+  slot.innerHTML = `
     <div class="rounded-lg bg-surface-container-low p-3">
       <div class="flex items-baseline justify-between gap-3 flex-wrap">
-        <span class="text-body-sm text-on-surface-variant">Precio sugerido c/u (antes de IVA)</span>
-        <span class="text-headline-sm font-headline-sm font-bold text-on-surface">${formatMoney(line.price_unit)}</span>
+        <span class="text-body-sm text-on-surface-variant">Precio sugerido c/u</span>
+        <span data-r-sug class="text-headline-sm font-headline-sm font-bold text-on-surface"></span>
       </div>
-      ${area ? `<p class="text-[11px] text-on-surface-variant mt-1">${area.toFixed(2)} ${perM2Label} · ${formatMoney(line.price_unit / area)} por m²</p>` : ''}
-      <p class="text-[12px] text-on-surface mt-2"><b>${escapeHtml(line.product_name)}</b> — ${escapeHtml(line.description)}</p>
-      <p class="text-[11px] text-on-surface-variant mt-2">Podrá cambiar el precio y el texto en la cotización antes de guardar.</p>
+      <p data-r-area class="text-[11px] text-on-surface-variant mt-1"></p>
+      <div class="grid grid-cols-1 ${withPrice ? 'md:grid-cols-[1fr_160px]' : ''} gap-3 mt-3">
+        <div><label class="${LABEL}">Nombre en la cotización</label><input data-r="name" type="text" class="${INPUT}" /></div>
+        ${withPrice ? `<div><label class="${LABEL}">Precio c/u</label><input data-r="price" type="number" min="0" step="1000" class="${INPUT} text-right" /></div>` : ''}
+      </div>
+      <div class="mt-3"><label class="${LABEL}">Descripción (sale en el PDF)</label><textarea data-r="desc" rows="4" class="${INPUT} resize-y"></textarea></div>
+      <div class="flex items-center justify-between gap-2 mt-2 flex-wrap">
+        <p class="text-[11px] text-on-surface-variant">Escriba libremente: lo que cambie aquí queda tal cual en la cotización.</p>
+        <button type="button" data-r-reset class="btn btn-ghost text-[11px] hidden"><span class="material-symbols-outlined">restart_alt</span>Volver al texto automático</button>
+      </div>
     </div>`;
+  const els = { name: slot.querySelector('[data-r="name"]'), desc: slot.querySelector('[data-r="desc"]'), price: slot.querySelector('[data-r="price"]') };
+  const manual = { name: false, desc: false, price: false };
+  const resetBtn = slot.querySelector('[data-r-reset]');
+  let auto = null;
+  let autoArea = 0;
+
+  const paintAuto = () => {
+    if (!manual.name) els.name.value = auto.product_name;
+    if (!manual.desc) els.desc.value = auto.description || '';
+    if (els.price && !manual.price) els.price.value = auto.price_unit || '';
+    const price = els.price && manual.price ? Number(els.price.value) || 0 : auto.price_unit;
+    slot.querySelector('[data-r-sug]').textContent = formatMoney(auto.price_unit);
+    slot.querySelector('[data-r-area]').textContent = autoArea ? `${autoArea.toFixed(2)} ${perM2Label} · ${formatMoney(price / autoArea)} por m²` : '';
+    resetBtn.classList.toggle('hidden', !Object.values(manual).some(Boolean));
+  };
+  Object.entries(els).forEach(([k, el]) =>
+    el?.addEventListener('input', () => {
+      manual[k] = true;
+      paintAuto();
+    })
+  );
+  resetBtn.addEventListener('click', () => {
+    Object.keys(manual).forEach((k) => (manual[k] = false));
+    paintAuto();
+  });
+
+  return {
+    update(line, area = 0) {
+      auto = line;
+      autoArea = area;
+      paintAuto();
+    },
+    line() {
+      return {
+        ...auto,
+        product_name: els.name.value.trim() || auto.product_name,
+        description: els.desc.value.trim() || null,
+        price_unit: els.price && manual.price ? Number(els.price.value) || 0 : auto.price_unit,
+      };
+    },
+  };
 }
 
 function footer(addLabel = 'Agregar a la cotización') {
@@ -104,13 +156,12 @@ function renderCarpa(body, config, done) {
       </div>
       <div data-price class="mt-4"></div>
       ${footer()}`;
-    const refresh = () => {
-      body.querySelector('[data-price]').innerHTML = priceBox(carpaLine(it, config), carpaArea(it));
-    };
+    const result = resultEditor(body.querySelector('[data-price]'));
+    const refresh = () => result.update(carpaLine(it, config), carpaArea(it));
     bindState(body, it, (k) => (k === 'modelo' ? paint() : refresh()));
     refresh();
     body.querySelector('[data-cancel]').addEventListener('click', done.close);
-    body.querySelector('[data-add]').addEventListener('click', () => done.add([carpaLine(it, config)], carpaServiceHints(it)));
+    body.querySelector('[data-add]').addEventListener('click', () => done.add([result.line()], carpaServiceHints(it)));
   };
   paint();
 }
@@ -147,13 +198,12 @@ function renderForro(body, config, done) {
       </div>
       <div data-price class="mt-4"></div>
       ${footer()}`;
-    const refresh = () => {
-      body.querySelector('[data-price]').innerHTML = priceBox(forroLine(it, config), forroArea(it), cap ? 'm² de material' : 'm²');
-    };
+    const result = resultEditor(body.querySelector('[data-price]'), { perM2Label: cap ? 'm² de material' : 'm²' });
+    const refresh = () => result.update(forroLine(it, config), forroArea(it));
     bindState(body, it, (k) => (k === 'modelo' ? paint() : refresh()));
     refresh();
     body.querySelector('[data-cancel]').addEventListener('click', done.close);
-    body.querySelector('[data-add]').addEventListener('click', () => done.add([forroLine(it, config)], forroServiceHints(it)));
+    body.querySelector('[data-add]').addEventListener('click', () => done.add([result.line()], forroServiceHints(it)));
   };
   paint();
 }
@@ -163,7 +213,7 @@ function renderCatalogo(body, config, done) {
   const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   body.innerHTML = `
     <input data-filter type="search" placeholder="Buscar: cabina 15, surtidor, ascensor…" class="${INPUT} mb-3" />
-    <p class="text-[11px] text-on-surface-variant mb-2">Precios unitarios antes de IVA. Se editan en Cotizaciones › Plantillas y tarifas.</p>
+    <p class="text-[11px] text-on-surface-variant mb-2">Precios unitarios. Se editan en Cotizaciones › Plantillas y tarifas; el texto y el precio también se pueden cambiar en la cotización.</p>
     <div data-list class="max-h-[50vh] overflow-y-auto border border-outline-variant rounded-lg"></div>
     <p data-count class="text-body-sm text-on-surface-variant mt-3"></p>
     ${footer('Agregar seleccionados')}`;
@@ -212,7 +262,7 @@ function renderCatalogo(body, config, done) {
   const paintCount = () => {
     const lines = selectedLines();
     const total = lines.reduce((a, l) => a + l.qty * l.price_unit, 0);
-    countEl.textContent = lines.length ? `${lines.length} producto(s) · ${formatMoney(total)} antes de IVA` : 'Marque los productos a cotizar.';
+    countEl.textContent = lines.length ? `${lines.length} producto(s) · ${formatMoney(total)}` : 'Marque los productos a cotizar.';
   };
   body.querySelector('[data-filter]').addEventListener('input', paintList);
   body.querySelector('[data-cancel]').addEventListener('click', done.close);
@@ -272,7 +322,7 @@ function renderCosteo(body, config, done) {
       });
       const r = costeoResult(state.lineas, state.margen, state.unidades);
       body.querySelector('[data-res]').innerHTML = `
-        <p class="text-body-sm text-on-surface-variant">Neto ${formatMoney(r.neto)} · Precio total <b class="text-on-surface">${formatMoney(r.total)}</b> · Con IVA ${formatMoney(r.total * 1.19)}</p>
+        <p class="text-body-sm text-on-surface-variant">Neto ${formatMoney(r.neto)} · Precio total <b class="text-on-surface">${formatMoney(r.total)}</b>${Number(config.iva) > 0 ? ` · Con IVA ${formatMoney(r.total * (1 + Number(config.iva) / 100))}` : ''}</p>
         <p class="mt-1 text-body-sm">Precio unitario: <span class="text-headline-sm font-headline-sm font-bold text-on-surface">${formatMoney(r.unit)}</span> (${r.unidades} und)</p>`;
     };
     body.querySelectorAll('[data-f]').forEach((el) =>
@@ -352,23 +402,24 @@ function renderAuto(kind) {
         ${moto ? checkHtml('espumaNueva', 'Espuma nueva (dos densidades)', it.espumaNueva) : ''}
         ${moto ? checkHtml('antideslizante', 'Antideslizante', it.antideslizante) : ''}
       </div>
-      <div class="mt-3 max-w-xs">${inputHtml('precioManual', 'Precio unitario (antes de IVA)', it.precioManual, 'number', 'min="0" step="1000"')}</div>
+      <div class="mt-3 max-w-xs">${inputHtml('precioManual', 'Precio unitario', it.precioManual, 'number', 'min="0" step="1000"')}</div>
+      <div data-nobase class="mt-4 hidden rounded-lg bg-tertiary-container text-on-tertiary-container p-3 text-body-sm">Esta opción aún no tiene precio base. Escriba el precio arriba, o configúrelo en Cotizaciones › Plantillas y tarifas para que se sugiera solo.</div>
       <div data-price class="mt-4"></div>
       ${footer()}`;
     const priceInput = body.querySelector('[data-k="precioManual"]');
+    const result = resultEditor(body.querySelector('[data-price]'), { withPrice: false });
     const refresh = () => {
       const sug = autoSuggested(it, config);
       priceInput.placeholder = sug ? String(sug) : 'Escriba el precio';
       const line = autoLine(it, config);
-      body.querySelector('[data-price]').innerHTML = sug || line.price_unit
-        ? priceBox(line, 0)
-        : `<div class="rounded-lg bg-tertiary-container text-on-tertiary-container p-3 text-body-sm">Esta opción aún no tiene precio base. Escriba el precio arriba, o configúrelo en Cotizaciones › Plantillas y tarifas para que se sugiera solo.</div>`;
+      body.querySelector('[data-nobase]').classList.toggle('hidden', !!(sug || line.price_unit));
+      result.update(line, 0);
     };
     bindState(body, it, refresh);
     refresh();
     body.querySelector('[data-cancel]').addEventListener('click', done.close);
     body.querySelector('[data-add]').addEventListener('click', () => {
-      const line = autoLine(it, config);
+      const line = result.line();
       if (!line.price_unit && !confirm('La línea queda en $0. ¿Agregarla de todas formas y poner el precio después?')) return;
       done.add([line], autoServiceHints(it));
     });

@@ -129,7 +129,7 @@ async function readJob(id) {
   const materialsCost = round(job.materials.reduce((s, m) => s - Number(m.qty) * Number(m.unit_cost), 0));
   const laborPaid = round(job.expenses.filter((e) => e.category === LABOR_CATEGORY).reduce((s, e) => s + e.amount, 0));
   const otherCost = round(job.expenses.filter((e) => e.category !== LABOR_CATEGORY).reduce((s, e) => s + e.amount, 0));
-  const revenue = round((Number(job.amount_total) || 0) / 1.19);
+  const revenue = round((Number(job.amount_total) || 0) / (1 + (await nativeQuotes.ivaRate())));
   job.profit = {
     revenue,
     materials_cost: materialsCost,

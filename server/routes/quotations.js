@@ -1,4 +1,7 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const PDFDocument = require('pdfkit');
 const { db, getSetting } = require('../db');
 const { broadcast } = require('../realtime');
@@ -8,6 +11,39 @@ const brand = require('../pdfBrand');
 const quoteTemplates = require('../quoteTemplates');
 
 const router = express.Router();
+
+// Imágenes de la cotización: el navegador las manda ya en JPEG y reducidas
+// (ver cotizar.js), así el PDF las puede incrustar y no pesa de más.
+const { UPLOAD_ROOT } = nativeQuotes;
+const MAX_IMAGE_MB = 10;
+const MAX_IMAGES = 12;
+const IMAGE_MIMES = { 'image/jpeg': '.jpg', 'image/png': '.png' };
+const uploadImage = multer({
+  storage: multer.diskStorage({
+    destination(req, file, cb) {
+      const dir = path.join(UPLOAD_ROOT, 'cotizaciones', String(Number(req.params.id) || 0));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename(req, file, cb) {
+      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e6)}${IMAGE_MIMES[file.mimetype] || '.jpg'}`);
+    },
+  }),
+  fileFilter(req, file, cb) {
+    cb(null, !!IMAGE_MIMES[file.mimetype]);
+  },
+  limits: { fileSize: MAX_IMAGE_MB * 1024 * 1024 },
+});
+
+// Se puede corregir hasta que se vuelve venta o se cancela.
+function isEditableState(quotation) {
+  return quotation.state !== 'sale' && quotation.state !== 'cancel';
+}
+
+function imagePath(img) {
+  const abs = path.resolve(UPLOAD_ROOT, img.stored_path);
+  return abs.startsWith(path.resolve(UPLOAD_ROOT)) && fs.existsSync(abs) ? abs : null;
+}
 
 const money = (n) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -101,6 +137,14 @@ router.get('/', async (req, res) => {
   res.json({ quotations });
 });
 
+// Condiciones de siempre para el servicio elegido: la pantalla Cotizar las
+// muestra en el cuadro de condiciones para que el asesor las ajuste.
+router.get('/default-terms', async (req, res) => {
+  const cfg = await quoteSettings();
+  const { title, lines } = defaultTerms(cfg, req.query.service || null);
+  res.json({ title, text: lines.join('\n') });
+});
+
 router.get('/:id', async (req, res) => {
   const quotation = await loadOwned(req, res);
   if (!quotation) return;
@@ -112,12 +156,17 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const quotation = await loadOwned(req, res);
   if (!quotation) return;
-  if (quotation.state !== 'draft' && quotation.state !== 'sent') {
-    return res.status(409).json({ error: 'Esta cotización ya está confirmada; no se pueden cambiar sus líneas' });
+  if (!isEditableState(quotation)) {
+    return res.status(409).json({ error: 'Esta cotización ya es venta o está cancelada; no se puede cambiar' });
   }
-  const { lines, service_slug, service_fields, note } = req.body || {};
+  const { lines, service_slug, service_fields, note, validity_days, terms, number } = req.body || {};
   const cleanLines = Array.isArray(lines) ? lines.filter((l) => l && l.product_name && Number(l.qty) > 0) : [];
   if (!cleanLines.length) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
+  // Número propio (vacío = vuelve al consecutivo COT-0001).
+  if (number !== undefined && String(number).trim() !== quotation.number) {
+    const r = await nativeQuotes.setNumber(quotation.id, number);
+    if (r.error) return res.status(400).json({ error: r.error });
+  }
 
   if (service_slug !== undefined) {
     if (service_slug) {
@@ -133,11 +182,93 @@ router.put('/:id', async (req, res) => {
   if (note !== undefined) {
     await db.prepare("UPDATE quotations SET note = ?, updated_at = datetime('now') WHERE id = ?").run((note && note.trim()) || null, quotation.id);
   }
+  // terms: texto (una condición por línea) o null = volver a las de siempre.
+  if (terms !== undefined) {
+    await db.prepare("UPDATE quotations SET terms = ?, updated_at = datetime('now') WHERE id = ?").run((terms && String(terms).trim()) || null, quotation.id);
+  }
+  // Vigencia: se cuenta desde la fecha de la cotización, no desde hoy.
+  if (Number(validity_days) > 0 && Number(validity_days) !== quotation.validity_days) {
+    const days = Math.round(Number(validity_days));
+    const base = new Date(`${String(quotation.date_order).slice(0, 10)}T00:00:00Z`);
+    const validityDate = new Date(base.getTime() + days * 86400000).toISOString().slice(0, 10);
+    await db.prepare("UPDATE quotations SET validity_days = ?, validity_date = ?, updated_at = datetime('now') WHERE id = ?").run(days, validityDate, quotation.id);
+  }
 
   await nativeQuotes.writeLines(quotation.id, cleanLines);
   const updated = await nativeQuotes.readQuotation(quotation.id);
   broadcast('leads_changed', { reason: 'quoted', id: quotation.lead_id });
   res.json({ quotation: updated });
+});
+
+// ---- imágenes ------------------------------------------------------------------
+
+router.post(
+  '/:id/images',
+  (req, res, next) =>
+    uploadImage.single('file')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `La imagen supera ${MAX_IMAGE_MB} MB` : err.message });
+      next();
+    }),
+  async (req, res) => {
+    const drop = () => req.file && fs.unlink(req.file.path, () => {});
+    const quotation = await loadOwned(req, res);
+    if (!quotation) return drop();
+    if (!isEditableState(quotation)) {
+      drop();
+      return res.status(409).json({ error: 'Esta cotización ya no se puede modificar' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Adjunta una imagen JPG o PNG' });
+    if (quotation.images.length >= MAX_IMAGES) {
+      drop();
+      return res.status(400).json({ error: `Máximo ${MAX_IMAGES} imágenes por cotización` });
+    }
+    const caption = String(req.body?.caption || '').trim().slice(0, 200) || null;
+    const position = quotation.images.reduce((m, i) => Math.max(m, i.position + 1), 0);
+    await db
+      .prepare('INSERT INTO quotation_images (quotation_id, caption, original_name, stored_path, mime, size, position, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(quotation.id, caption, req.file.originalname, path.relative(UPLOAD_ROOT, req.file.path), req.file.mimetype, req.file.size, position, req.user.id || null);
+    res.status(201).json({ quotation: await nativeQuotes.readQuotation(quotation.id) });
+  }
+);
+
+async function loadImage(req, res) {
+  const img = await db.prepare('SELECT * FROM quotation_images WHERE id = ?').get(Number(req.params.imageId));
+  if (!img) {
+    res.status(404).json({ error: 'Imagen no encontrada' });
+    return null;
+  }
+  req.params.id = img.quotation_id;
+  const quotation = await loadOwned(req, res);
+  return quotation ? { img, quotation } : null;
+}
+
+router.get('/images/:imageId', async (req, res) => {
+  const found = await loadImage(req, res);
+  if (!found) return;
+  const abs = imagePath(found.img);
+  if (!abs) return res.status(404).json({ error: 'La imagen ya no está en el disco' });
+  res.setHeader('Content-Type', found.img.mime || 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  fs.createReadStream(abs).pipe(res);
+});
+
+router.patch('/images/:imageId', async (req, res) => {
+  const found = await loadImage(req, res);
+  if (!found) return;
+  if (!isEditableState(found.quotation)) return res.status(409).json({ error: 'Esta cotización ya no se puede modificar' });
+  const caption = String(req.body?.caption || '').trim().slice(0, 200) || null;
+  await db.prepare('UPDATE quotation_images SET caption = ? WHERE id = ?').run(caption, found.img.id);
+  res.json({ quotation: await nativeQuotes.readQuotation(found.quotation.id) });
+});
+
+router.delete('/images/:imageId', async (req, res) => {
+  const found = await loadImage(req, res);
+  if (!found) return;
+  if (!isEditableState(found.quotation)) return res.status(409).json({ error: 'Esta cotización ya no se puede modificar' });
+  await db.prepare('DELETE FROM quotation_images WHERE id = ?').run(found.img.id);
+  const abs = imagePath(found.img);
+  if (abs) fs.unlink(abs, () => {});
+  res.json({ quotation: await nativeQuotes.readQuotation(found.quotation.id) });
 });
 
 router.post('/:id/send', async (req, res) => {
@@ -241,6 +372,31 @@ const DEFAULT_TERMS = [
   'Cualquier cambio en el diseño o los materiales puede modificar el precio.',
 ];
 
+function splitTerms(text) {
+  return String(text || '')
+    .split('\n')
+    .map((s) => s.replace(/^\s*[-•*]\s*/, '').trim())
+    .filter(Boolean);
+}
+
+// Condiciones de siempre para un servicio (sin la línea de vigencia, que la
+// pone el PDF con la fecha de cada cotización). Carpas y forros
+// (fabricación) llevan sus propias políticas, editables en Cotizaciones ›
+// Plantillas y tarifas; el resto usa las de Ajustes. Tiempo de entrega y
+// garantía salen de una sola tabla por servicio, igual a la del sitio.
+function defaultTerms(cfg, slug) {
+  const fabrication = quoteTemplates.isFabrication(slug) && (cfg.termsFabricacion || []).length;
+  const terms = fabrication ? cfg.termsFabricacion.map((s) => String(s).trim()).filter(Boolean) : splitTerms(cfg.terms);
+  const lines = (terms.length ? terms : DEFAULT_TERMS.slice()).filter((t) => !/^(garant[ií]a|tiempo estimado)/i.test(t));
+  const leadTime = cfg.tiempos && slug ? cfg.tiempos[slug] : null;
+  const warranty = cfg.garantias && slug ? cfg.garantias[slug] : null;
+  const generated = [];
+  if (leadTime) generated.push(`Tiempo estimado de entrega: ${leadTime} (puede variar según la carga del taller y la complejidad del trabajo).`);
+  if (warranty) generated.push(`Garantía: ${warranty}. ${cfg.garantiaReclamo || ''}`.trim());
+  lines.splice(fabrication ? Math.min(2, lines.length) : 0, 0, ...generated);
+  return { title: fabrication ? 'Políticas y condiciones' : 'Condiciones comerciales', lines };
+}
+
 // Dibuja la cotización completa sobre un PDFDocument ya creado (sin abrirlo
 // ni cerrarlo -- eso lo hace quien llama). Calca la hoja oficial de VELARA
 // (Velara/VELARA_IDENTIDAD_VISUAL/02_PAPELERIA/Cotizacion): encabezado con
@@ -249,7 +405,7 @@ const DEFAULT_TERMS = [
 // encabezado grafito, total en bloque rojo, condiciones comerciales y pie
 // con las franjas de marca (ver server/pdfBrand.js). Aparte del router para
 // poder probarla desde un script suelto sin pasar por HTTP/auth.
-function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
+function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg, images = [] }) {
   const { C, F, PAGE } = brand;
   const service = quotation.service_slug ? velaraServices.findService(quotation.service_slug) : null;
 
@@ -334,11 +490,19 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
       yPay += doc.heightOfString(line, { width: 270 }) + 2;
     }
   }
-  y = brand.drawTotals(doc, blockTop, [
-    ['Subtotal', money(quotation.amount_untaxed)],
-    ['IVA (19 %)', money(quotation.amount_tax)],
-    ['Total', money(quotation.amount_total)],
-  ]);
+  // Sin IVA (hoy VELARA no lo cobra) sale solo el total.
+  const taxPct = quotation.amount_untaxed > 0 ? Math.round((quotation.amount_tax / quotation.amount_untaxed) * 100) : 0;
+  y = brand.drawTotals(
+    doc,
+    blockTop,
+    quotation.amount_tax > 0
+      ? [
+          ['Subtotal', money(quotation.amount_untaxed)],
+          [`IVA (${taxPct} %)`, money(quotation.amount_tax)],
+          ['Total', money(quotation.amount_total)],
+        ]
+      : [['Total', money(quotation.amount_total)]]
+  );
   y = Math.max(y, yPay) + 20;
 
   // ---- observaciones (si hay) ----------------------------------------------
@@ -350,28 +514,41 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg }) {
     y += doc.heightOfString(notes, { width: PAGE.W }) + 14;
   }
 
+  // ---- imágenes de referencia (2 por fila, con su leyenda) -----------------
+  if (images.length) {
+    const gap = 15;
+    const cellW = (PAGE.W - gap) / 2;
+    const imgH = 170;
+    y = brand.ensureSpace(doc, y, 30 + imgH);
+    y = brand.sectionHeading(doc, 'Imágenes de referencia', PAGE.L, y);
+    for (let i = 0; i < images.length; i += 2) {
+      const pair = images.slice(i, i + 2);
+      doc.font(F.regular).fontSize(8);
+      const captionH = Math.max(0, ...pair.map((im) => (im.caption ? doc.heightOfString(im.caption, { width: cellW }) + 4 : 0)));
+      y = brand.ensureSpace(doc, y, imgH + captionH + 6);
+      pair.forEach((im, j) => {
+        const x = PAGE.L + j * (cellW + gap);
+        try {
+          doc.image(im.path, x, y, { fit: [cellW, imgH], align: 'center', valign: 'center' });
+        } catch {
+          doc.font(F.regular).fontSize(8).fillColor(C.ink).text('(imagen no disponible)', x, y + imgH / 2, { width: cellW, align: 'center' });
+        }
+        if (im.caption) doc.font(F.regular).fontSize(8).fillColor(C.ink).text(im.caption, x, y + imgH + 4, { width: cellW, align: 'center' });
+      });
+      y += imgH + captionH + 14;
+    }
+  }
+
   // ---- condiciones comerciales --------------------------------------------
-  // Carpas y forros (fabricación) llevan sus propias políticas, editables en
-  // Cotizaciones › Plantillas y tarifas; el resto usa las de Ajustes.
-  const fabrication = quoteTemplates.isFabrication(quotation.service_slug) && (cfg.termsFabricacion || []).length;
-  const terms = fabrication
-    ? cfg.termsFabricacion.map((s) => String(s).trim()).filter(Boolean)
-    : (cfg.terms || '').split('\n').map((s) => s.trim()).filter(Boolean);
-  // Tiempo de entrega y garantía salen de una sola tabla por servicio
-  // (Plantillas y tarifas), igual a la del sitio: se quitan las líneas de
-  // tiempo/garantía escritas a mano y se ponen las del servicio cotizado.
-  const slug = quotation.service_slug;
-  const termLines = (terms.length ? terms : DEFAULT_TERMS.slice()).filter((t) => !/^(garant[ií]a|tiempo estimado)/i.test(t));
-  const leadTime = cfg.tiempos && slug ? cfg.tiempos[slug] : null;
-  const warranty = cfg.garantias && slug ? cfg.garantias[slug] : null;
-  const generated = [];
-  if (leadTime) generated.push(`Tiempo estimado de entrega: ${leadTime} (puede variar según la carga del taller y la complejidad del trabajo).`);
-  if (warranty) generated.push(`Garantía: ${warranty}. ${cfg.garantiaReclamo || ''}`.trim());
-  termLines.splice(fabrication ? Math.min(2, termLines.length) : 0, 0, ...generated);
+  // Las escritas a mano en la cotización mandan; si no hay, las de siempre.
+  const base = defaultTerms(cfg, quotation.service_slug);
+  const termLines = quotation.terms ? splitTerms(quotation.terms) : base.lines;
   if (quotation.validity_date) termLines.push(`Esta cotización es válida hasta el ${fmtDateDMY(quotation.validity_date)}.`);
-  y = brand.ensureSpace(doc, y, 50);
-  y = brand.sectionHeading(doc, fabrication ? 'Políticas y condiciones' : 'Condiciones comerciales', PAGE.L, y);
-  y = brand.bulletList(doc, PAGE.L, y, PAGE.W, termLines);
+  if (termLines.length) {
+    y = brand.ensureSpace(doc, y, 50);
+    y = brand.sectionHeading(doc, base.title, PAGE.L, y);
+    y = brand.bulletList(doc, PAGE.L, y, PAGE.W, termLines);
+  }
 
   // ---- cierre -----------------------------------------------------------------
   y = brand.ensureSpace(doc, y + 14, 11);
@@ -386,6 +563,9 @@ router.get('/:id/pdf', async (req, res) => {
   const advisor =
     lead && lead.assigned_advisor_id ? await db.prepare('SELECT name FROM advisors WHERE id = ?').get(lead.assigned_advisor_id) : null;
   const cfg = await quoteSettings();
+  const images = (await db.prepare('SELECT * FROM quotation_images WHERE quotation_id = ? ORDER BY position, id').all(quotation.id))
+    .map((img) => ({ caption: img.caption, path: imagePath(img) }))
+    .filter((img) => img.path);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${quotation.number || 'cotizacion'}.pdf"`);
@@ -396,7 +576,7 @@ router.get('/:id/pdf', async (req, res) => {
     info: { Title: `Cotizacion ${quotation.number || ''}`.trim(), Author: cfg.name },
   });
   doc.pipe(res);
-  drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg });
+  drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg, images });
   doc.end();
 });
 

@@ -100,15 +100,16 @@ function findService(slug) {
   return SERVICES.find((s) => s.slug === slug) || null;
 }
 
-// Valida que `fields` solo tenga llaves conocidas del servicio y que las
-// obligatorias vengan con algo -- se usa al crear/editar una cotización.
+// Deja solo las llaves conocidas del servicio -- se usa al crear/editar una
+// cotización. Ningún campo es obligatorio al cotizar (2026-10-08): la
+// descripción de cada línea ya lleva medidas, material y color, y exigirlos
+// otra vez frenaba al asesor. `required` queda como guía visual.
 function validateServiceFields(slug, fields) {
   const service = findService(slug);
   if (!service) return { ok: false, error: `Servicio desconocido: ${slug}` };
   const clean = {};
   for (const f of service.fields) {
     const value = fields && typeof fields[f.key] === 'string' ? fields[f.key].trim() : '';
-    if (f.required && !value) return { ok: false, error: `Falta "${f.label}" para ${service.title}` };
     if (value) clean[f.key] = value;
   }
   return { ok: true, fields: clean };

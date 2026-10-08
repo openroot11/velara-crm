@@ -100,6 +100,9 @@ const DEFAULT_CONFIG = {
   transporte: 120000,
   impresionLogo: 120000,
   redondeo: 10000,
+  // IVA de las cotizaciones en %. 0 = VELARA no cobra IVA por ahora (no
+  // sale en la pantalla ni en el PDF). Cambiarlo a 19 cuando se facture con IVA.
+  iva: 0,
   costeo: {
     margen: 0.48,
     plantillas: {

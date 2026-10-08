@@ -6,6 +6,7 @@ const { db, DATA_DIR } = require('../db');
 const { broadcast } = require('../realtime');
 const { requireRole } = require('../middleware/auth');
 const erp = require('../erp');
+const nativeQuotes = require('../nativeQuotes');
 
 // Finanzas del negocio. Todo lo que entra y sale de plata:
 //   - cash_entries: gastos y otros ingresos (con cuenta, categoría, foto del
@@ -656,8 +657,9 @@ router.get('/profitability', async (req, res) => {
         ORDER BY COALESCE(wo.delivered_at, wo.created_at) DESC`
     )
     .all(...(all ? [LABOR_CATEGORY, LABOR_CATEGORY] : [LABOR_CATEGORY, LABOR_CATEGORY, from, to]));
+  const iva = await nativeQuotes.ivaRate();
   const rows = orders.map((o) => {
-    const revenue = round((Number(o.amount_total) || 0) / 1.19);
+    const revenue = round((Number(o.amount_total) || 0) / (1 + iva));
     const materials = round(o.materials_cost);
     // El pago acordado al operario cuenta aunque todavía no se le haya pagado.
     const labor = Math.max(round(o.labor_cost), round(o.agreed_labor));

@@ -26,7 +26,57 @@ const STATE_STEPS = [
   { key: 'sale', label: 'Venta', icon: 'task_alt' },
 ];
 
-const IVA_RATE = 0.19;
+// Lado a lado de los totales: el IVA sale de Plantillas y tarifas ("iva",
+// en %). Hoy VELARA no cobra IVA (0) y entonces no se muestra en ningún lado.
+function ivaPct(config) {
+  return Math.min(100, Math.max(0, Number(config?.iva) || 0));
+}
+
+// Fotos/diseños: se reducen a 1600 px y se pasan a JPEG en el navegador
+// (así cualquier formato que abra el navegador -- HEIC de iPhone en Safari,
+// WebP, PNG -- entra al PDF sin pesar de más).
+const MAX_IMAGE_SIDE = 1600;
+
+async function toJpeg(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error(`No se pudo leer la imagen "${file.name}"`));
+      el.src = url;
+    });
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#fff'; // fondo blanco para PNG con transparencia
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) throw new Error(`No se pudo convertir "${file.name}"`);
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+// La API JSON (api.js) no manda archivos: la imagen va por FormData.
+async function uploadQuotationImage(quotationId, blob, name, caption) {
+  const fd = new FormData();
+  fd.append('caption', caption || '');
+  fd.append('file', blob, (name || 'imagen').replace(/\.[^.]+$/, '') + '.jpg');
+  const res = await fetch(`/api/quotations/${quotationId}/images`, { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data.quotation;
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(320, el.scrollHeight + 2)}px`;
+}
 
 function fmtDate(isoDate) {
   if (!isoDate) return '—';
@@ -113,6 +163,11 @@ export async function mount(container, ctx) {
   let selectedServiceSlug = null;
   let serviceFieldValues = {};
   let advisorsCache = [];
+  // Imágenes elegidas antes de guardar la primera vez: se suben al guardar.
+  let pendingImages = []; // { blob, name, caption, url }
+  // Condiciones: true = el asesor las escribió para esta cotización; false =
+  // se muestran las de siempre del servicio (y se recargan si cambia).
+  let termsCustom = false;
   // Tarifas, catálogo y observaciones de las plantillas (Cotizaciones ›
   // Plantillas y tarifas). Sin esto la pantalla funciona igual, solo sin
   // la barra de plantillas.
@@ -130,8 +185,9 @@ export async function mount(container, ctx) {
     }
   }
 
+  // Se puede corregir hasta que se vuelve venta o se cancela.
   function isEditable() {
-    return !quotation || quotation.state === 'draft' || quotation.state === 'sent';
+    return !quotation || (quotation.state !== 'sale' && quotation.state !== 'cancel');
   }
 
   // Trae el historial de cotizaciones nativas del lead activo y deja
@@ -153,6 +209,8 @@ export async function mount(container, ctx) {
   }
 
   function resetAll() {
+    pendingImages.forEach((p) => URL.revokeObjectURL(p.url));
+    pendingImages = [];
     lead = null;
     quotation = null;
     history = [];
@@ -209,7 +267,7 @@ export async function mount(container, ctx) {
       2,
       'construction',
       'Servicio',
-      'Seleccione el servicio y complete los detalles.',
+      'Seleccione el servicio. Los detalles son opcionales: salen en el PDF solo si los llena.',
       `
       <div class="max-w-xs mb-3">
         <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Servicio *</label>
@@ -237,7 +295,7 @@ export async function mount(container, ctx) {
         const value = serviceFieldValues[f.key] || '';
         if (f.type === 'select') {
           return `<div>
-            <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">${escapeHtml(f.label)}${f.required ? ' *' : ''}</label>
+            <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">${escapeHtml(f.label)}</label>
             <select data-svc-field="${f.key}" ${editable ? '' : 'disabled'} class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-body-sm">
               <option value="">Seleccione…</option>
               ${f.options.map((o) => `<option value="${escapeHtml(o)}" ${o === value ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
@@ -245,7 +303,7 @@ export async function mount(container, ctx) {
           </div>`;
         }
         return `<div>
-          <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">${escapeHtml(f.label)}${f.required ? ' *' : ''}</label>
+          <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">${escapeHtml(f.label)}</label>
           <input data-svc-field="${f.key}" type="text" ${editable ? '' : 'readonly'} value="${escapeHtml(value)}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-body-sm ${editable ? '' : 'bg-surface-container-low text-on-surface-variant'}" />
         </div>`;
       })
@@ -275,6 +333,7 @@ export async function mount(container, ctx) {
       selectedServiceSlug = select.value || null;
       serviceFieldValues = {}; // servicio nuevo -> campos propios distintos, no tiene sentido conservar los del anterior
       renderServiceFields();
+      loadDefaultTerms();
     });
   }
 
@@ -297,21 +356,23 @@ export async function mount(container, ctx) {
     const totalsEl = root.querySelector('#cz-totals');
     const list = root.querySelector('#cz-lines');
     if (!totalsEl || !list) return;
+    const totalsHtml = (sub, iva, label) => `
+      ${
+        iva > 0
+          ? `<div class="flex justify-between gap-8 text-body-sm text-on-surface-variant"><span>Subtotal</span><span class="font-bold text-on-surface">${formatMoney(sub)}</span></div>
+             <div class="flex justify-between gap-8 text-body-sm text-on-surface-variant mt-1"><span>${label}</span><span class="font-bold text-on-surface">${formatMoney(iva)}</span></div>`
+          : ''
+      }
+      <div class="flex justify-between gap-8 items-baseline mt-2 pt-2 px-3 -mx-3 rounded-lg bg-primary-container"><span class="text-body-md font-bold text-on-surface">Total</span><span class="text-headline-sm font-headline-sm font-bold text-on-surface">${formatMoney(sub + iva)}</span></div>
+    `;
     if (!isEditable()) {
-      totalsEl.innerHTML = `
-        <div class="flex justify-between gap-8 text-body-sm text-on-surface-variant"><span>Subtotal</span><span class="font-bold text-on-surface">${formatMoney(quotation.amount_untaxed)}</span></div>
-        <div class="flex justify-between gap-8 text-body-sm text-on-surface-variant mt-1"><span>IVA 19%</span><span class="font-bold text-on-surface">${formatMoney(quotation.amount_tax)}</span></div>
-        <div class="flex justify-between gap-8 items-baseline mt-2 pt-2 px-3 -mx-3 rounded-lg bg-primary-container"><span class="text-body-md font-bold text-on-surface">Total</span><span class="text-headline-sm font-headline-sm font-bold text-on-surface">${formatMoney(quotation.amount_total)}</span></div>
-      `;
+      const pct = quotation.amount_untaxed > 0 ? Math.round((quotation.amount_tax / quotation.amount_untaxed) * 100) : 0;
+      totalsEl.innerHTML = totalsHtml(quotation.amount_untaxed, quotation.amount_tax, `IVA ${pct}%`);
       return;
     }
     const sub = computeClientTotals(list);
-    const iva = sub * IVA_RATE;
-    totalsEl.innerHTML = `
-      <div class="flex justify-between gap-8 text-body-sm text-on-surface-variant"><span>Subtotal</span><span class="font-bold text-on-surface">${formatMoney(sub)}</span></div>
-      <div class="flex justify-between gap-8 text-body-sm text-on-surface-variant mt-1"><span>IVA 19%</span><span class="font-bold text-on-surface">${formatMoney(iva)}</span></div>
-      <div class="flex justify-between gap-8 items-baseline mt-2 pt-2 px-3 -mx-3 rounded-lg bg-primary-container"><span class="text-body-md font-bold text-on-surface">Total</span><span class="text-headline-sm font-headline-sm font-bold text-on-surface">${formatMoney(sub + iva)}</span></div>
-    `;
+    const pct = ivaPct(templateConfig);
+    totalsEl.innerHTML = totalsHtml(sub, (sub * pct) / 100, `IVA ${pct}%`);
     const countEl = root.querySelector('#cz-line-count');
     if (countEl) countEl.textContent = list.querySelectorAll('[data-line]').length;
   }
@@ -344,7 +405,6 @@ export async function mount(container, ctx) {
           <span>${preset.qty} Unidades</span>
           <span>${formatMoney(preset.price_unit)} c/u</span>
           ${discount > 0 ? `<span class="text-error font-bold">− ${discount}%</span>` : ''}
-          <span class="px-1.5 py-0.5 rounded bg-surface-container-high">IVA 19%</span>
         </div>
       `;
       list.appendChild(row);
@@ -363,7 +423,7 @@ export async function mount(container, ctx) {
             <input data-prod type="hidden" />
             <div data-prod-results class="hidden fixed z-[9999] bg-surface border border-outline-variant rounded-md shadow-lg max-h-52 overflow-y-auto"></div>
           </div>
-          <textarea data-description rows="1" placeholder="Descripción (opcional)" class="w-full p-1.5 mt-1.5 border-0 border-b border-transparent hover:border-outline-variant focus:border-outline text-[12px] text-on-surface-variant outline-none bg-transparent resize-y"></textarea>
+          <textarea data-description rows="2" placeholder="Descripción: medidas, material, color, lo que incluye… (se puede escribir libremente)" class="w-full p-2 mt-1.5 border border-outline-variant rounded-md focus:border-outline text-[12px] text-on-surface outline-none bg-surface resize-y"></textarea>
           <div class="flex items-end gap-3 mt-2 flex-wrap">
             <div>
               <label class="block text-[10px] font-label-bold uppercase text-on-surface-variant">Cantidad</label>
@@ -381,7 +441,6 @@ export async function mount(container, ctx) {
               <label class="block text-[10px] font-label-bold uppercase text-on-surface-variant">Desc. %</label>
               <input data-discount type="number" min="0" max="100" step="1" value="0" class="w-16 h-8 px-2 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm text-right" />
             </div>
-            <span class="text-[10px] px-1.5 py-1 rounded bg-surface-container-high text-on-surface-variant self-center">IVA 19%</span>
             <div class="flex-1 text-right">
               <label class="block text-[10px] font-label-bold uppercase text-on-surface-variant">Subtotal</label>
               <p data-subtotal class="font-bold text-on-surface">${formatMoney(0)}</p>
@@ -469,6 +528,7 @@ export async function mount(container, ctx) {
       pick({ id: Number(b.dataset.pid), name: b.dataset.pname, price: Number(b.dataset.pprice), description: b.dataset.pdesc });
     });
     search.addEventListener('blur', () => setTimeout(() => results.classList.add('hidden'), 150));
+    description.addEventListener('input', () => autoGrow(description));
     qty.addEventListener('input', recalcRow);
     price.addEventListener('input', recalcRow);
     discountInput.addEventListener('input', recalcRow);
@@ -490,16 +550,14 @@ export async function mount(container, ctx) {
     if (preset) {
       if (preset.product_id) hidden.value = preset.product_id;
       if (preset.product_name) search.value = preset.product_name;
-      if (preset.description) {
-        description.value = preset.description;
-        description.rows = Math.min(5, Math.ceil(preset.description.length / 90));
-      }
+      if (preset.description) description.value = preset.description;
       if (preset.qty != null) qty.value = preset.qty;
       if (preset.price_unit != null) price.value = Math.round(preset.price_unit);
       if (preset.discount_percent) discountInput.value = preset.discount_percent;
     }
 
     list.appendChild(row);
+    autoGrow(description);
     recalcRow();
   }
 
@@ -568,6 +626,7 @@ export async function mount(container, ctx) {
       serviceFieldValues = {};
       const select = root.querySelector('#cz-service');
       if (select) select.value = service_slug;
+      loadDefaultTerms();
     }
     if (service_slug && service_slug === selectedServiceSlug) {
       serviceFieldValues = { ...serviceFieldValues, ...readServiceFields() };
@@ -600,17 +659,187 @@ export async function mount(container, ctx) {
     });
   }
 
+  // ---- imágenes de referencia (salen en el PDF) -------------------------------
+  function imagesSection() {
+    const editable = isEditable();
+    const saved = quotation?.images || [];
+    if (!editable && !saved.length) return '';
+    const cell = (src, caption, attrs) => `
+      <div class="border border-outline-variant rounded-lg overflow-hidden bg-surface-container-lowest">
+        <a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy" class="w-full aspect-[4/3] object-cover" /></a>
+        <div class="p-2 flex items-start gap-1">
+          ${
+            editable
+              ? `<input ${attrs.input} type="text" maxlength="200" value="${escapeHtml(caption || '')}" placeholder="Leyenda (opcional)" class="flex-1 min-w-0 p-1 border border-outline-variant rounded-md text-[12px] outline-none focus:border-outline" />
+                 <button type="button" ${attrs.del} class="btn btn-icon shrink-0" aria-label="Quitar imagen"><span class="material-symbols-outlined text-[18px]">delete</span></button>`
+              : `<p class="text-[12px] text-on-surface-variant">${escapeHtml(caption || '')}</p>`
+          }
+        </div>
+      </div>`;
+    const cells = [
+      ...saved.map((img) => cell(`/api/quotations/images/${img.id}`, img.caption, { input: `data-img-caption="${img.id}"`, del: `data-img-del="${img.id}"` })),
+      ...pendingImages.map((p, i) => cell(p.url, p.caption, { input: `data-pend-caption="${i}"`, del: `data-pend-del="${i}"` })),
+    ];
+    return stepCard(
+      5,
+      'image',
+      'Imágenes',
+      'Diseños, fotos del sitio o modelos de referencia. Salen en el PDF, dos por fila, con su leyenda.',
+      `
+        ${cells.length ? `<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">${cells.join('')}</div>` : ''}
+        ${
+          editable
+            ? `<label class="btn btn-secondary text-[12px] cursor-pointer inline-flex">
+                 <span class="material-symbols-outlined">add_photo_alternate</span>Agregar imágenes
+                 <input id="cz-images" type="file" accept="image/*" multiple class="hidden" />
+               </label>
+               ${!quotation && pendingImages.length ? '<p class="text-[11px] text-on-surface-variant mt-2">Se suben al guardar la cotización.</p>' : ''}`
+            : ''
+        }
+      `
+    );
+  }
+
+  async function loadDefaultTerms() {
+    const ta = root.querySelector('#cz-terms');
+    if (!ta || termsCustom) return;
+    try {
+      const r = await ctx.api.get(`/api/quotations/default-terms?service=${encodeURIComponent(selectedServiceSlug || '')}`);
+      if (!termsCustom && ta.isConnected) {
+        ta.value = r.text;
+        autoGrow(ta);
+      }
+    } catch {
+      /* sin condiciones por defecto: el cuadro queda vacío y el PDF usa las de siempre */
+    }
+  }
+
+  function wireTerms() {
+    const ta = root.querySelector('#cz-terms');
+    if (!ta) return;
+    const reset = root.querySelector('#cz-terms-reset');
+    termsCustom = !!quotation?.terms;
+    ta.addEventListener('input', () => {
+      termsCustom = true;
+      reset.classList.remove('hidden');
+      autoGrow(ta);
+    });
+    reset.addEventListener('click', () => {
+      termsCustom = false;
+      reset.classList.add('hidden');
+      loadDefaultTerms();
+    });
+    if (termsCustom) autoGrow(ta);
+    else loadDefaultTerms();
+  }
+
+  async function uploadPending(quotationId) {
+    if (!pendingImages.length) return;
+    let failed = 0;
+    for (const p of pendingImages) {
+      try {
+        await uploadQuotationImage(quotationId, p.blob, p.name, p.caption);
+      } catch (err) {
+        failed++;
+        ctx.toast(err.message, 'error');
+      }
+      URL.revokeObjectURL(p.url);
+    }
+    pendingImages = [];
+    if (failed) ctx.toast(`${failed} imagen(es) no se pudieron subir`, 'error');
+  }
+
+  function wireImages() {
+    const input = root.querySelector('#cz-images');
+    input?.addEventListener('change', async () => {
+      const files = [...input.files];
+      input.value = '';
+      if (!files.length) return;
+      const label = input.closest('label');
+      label?.classList.add('opacity-60', 'pointer-events-none');
+      for (const file of files) {
+        let blob;
+        try {
+          blob = await toJpeg(file);
+        } catch (err) {
+          ctx.toast(err.message, 'error');
+          continue;
+        }
+        if (quotation) {
+          try {
+            quotation = await uploadQuotationImage(quotation.id, blob, file.name, '');
+          } catch (err) {
+            ctx.toast(err.message, 'error');
+          }
+        } else {
+          pendingImages.push({ blob, name: file.name, caption: '', url: URL.createObjectURL(blob) });
+        }
+      }
+      if (quotation) history = history.map((q) => (q.id === quotation.id ? quotation : q));
+      rerenderImages();
+    });
+    root.querySelectorAll('[data-pend-caption]').forEach((el) =>
+      el.addEventListener('input', () => {
+        pendingImages[Number(el.dataset.pendCaption)].caption = el.value;
+      })
+    );
+    root.querySelectorAll('[data-pend-del]').forEach((el) =>
+      el.addEventListener('click', () => {
+        const [p] = pendingImages.splice(Number(el.dataset.pendDel), 1);
+        if (p) URL.revokeObjectURL(p.url);
+        rerenderImages();
+      })
+    );
+    root.querySelectorAll('[data-img-caption]').forEach((el) =>
+      el.addEventListener('change', async () => {
+        try {
+          quotation = (await ctx.api.patch(`/api/quotations/images/${el.dataset.imgCaption}`, { caption: el.value })).quotation;
+          ctx.toast('Leyenda guardada', 'success');
+        } catch (err) {
+          ctx.toast(err.message, 'error');
+        }
+      })
+    );
+    root.querySelectorAll('[data-img-del]').forEach((el) =>
+      el.addEventListener('click', async () => {
+        if (!confirm('¿Quitar esta imagen de la cotización?')) return;
+        try {
+          quotation = (await ctx.api.del(`/api/quotations/images/${el.dataset.imgDel}`)).quotation;
+          history = history.map((q) => (q.id === quotation.id ? quotation : q));
+          rerenderImages();
+        } catch (err) {
+          ctx.toast(err.message, 'error');
+        }
+      })
+    );
+  }
+
+  // Solo repinta la tarjeta de imágenes: no se pierde lo que se lleva escrito
+  // en las líneas sin guardar.
+  function rerenderImages() {
+    const slot = root.querySelector('#cz-images-slot');
+    if (!slot) return;
+    slot.innerHTML = imagesSection();
+    wireImages();
+  }
+
   // ---- cliente: buscador + datos de facturación ------------------------------
+  // Coordinador/admin eligen el asesor (también en un cliente ya
+  // registrado: se cambia al guardar). El asesor ve el suyo, sin cambiarlo.
   function clientSection() {
-    const advisorField = lead
-      ? field('cz-advisor-ro', 'Vendedor', lead.advisor_name || 'Sin asignar', { readonly: true })
-      : ctx.user?.role !== 'asesor'
-        ? `<div>
-             <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Asesor *</label>
-             <select id="cz-advisor" class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-body-sm">
-               ${advisorsCache.map((a) => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('')}
-             </select>
-           </div>`
+    const canPickAdvisor = ctx.user?.role !== 'asesor' && advisorsCache.length;
+    const current = lead?.assigned_advisor_id;
+    const advisorField = canPickAdvisor
+      ? `<div>
+           <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Asesor *</label>
+           <select id="cz-advisor" class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-body-sm">
+             ${lead && !current ? '<option value="">Sin asignar</option>' : ''}
+             ${advisorsCache.map((a) => `<option value="${a.id}" ${a.id === current ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
+             ${current && !advisorsCache.some((a) => a.id === current) ? `<option value="${current}" selected>${escapeHtml(lead.advisor_name || 'Asesor inactivo')}</option>` : ''}
+           </select>
+         </div>`
+      : lead
+        ? field('cz-advisor-ro', 'Asesor', lead.advisor_name || 'Sin asignar', { readonly: true })
         : `<div class="md:col-span-3 flex items-center gap-1.5 text-[11px] text-tertiary"><span class="material-symbols-outlined text-[14px]">info</span>Cliente nuevo: solo coordinador/admin puede registrarlo. Busca uno que ya exista.</div>`;
 
     return stepCard(
@@ -834,11 +1063,13 @@ export async function mount(container, ctx) {
             'Agregue los conceptos y precios.',
             `
               ${
-                !quotation
-                  ? `<div class="flex items-center gap-1.5 mb-3">
+                isEditable()
+                  ? `<div class="flex items-center gap-1.5 mb-3 flex-wrap">
+                       <label for="cz-number" class="text-[11px] text-on-surface-variant">N.º de cotización</label>
+                       <input id="cz-number" type="text" maxlength="40" value="${quotation ? escapeHtml(quotation.number || '') : ''}" placeholder="Automático (COT-0001)" class="w-44 p-1 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm mr-3" />
                        <label class="text-[11px] text-on-surface-variant">Válida por</label>
-                       <input id="cz-validity" type="number" min="1" value="8" class="w-14 p-1 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm" />
-                       <span class="text-[11px] text-on-surface-variant">días</span>
+                       <input id="cz-validity" type="number" min="1" value="${quotation ? quotation.validity_days || 8 : 8}" class="w-14 p-1 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm" />
+                       <span class="text-[11px] text-on-surface-variant">días${quotation ? ' desde la fecha de la cotización' : ''}</span>
                      </div>`
                   : ''
               }
@@ -848,19 +1079,27 @@ export async function mount(container, ctx) {
             `
           )}
           ${
-            !quotation
+            isEditable()
               ? stepCard(
                   4,
                   'sticky_note_2',
                   'Notas y condiciones',
                   'Incluya información adicional, tiempos de entrega o condiciones.',
-                  `<textarea id="cz-note" rows="3" placeholder="Opcional — se incluye en el PDF de la cotización" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20"></textarea>
-                   ${quickNotes()}`
+                  `<label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Observaciones</label>
+                   <textarea id="cz-note" rows="3" placeholder="Opcional — se incluye en el PDF de la cotización" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20">${escapeHtml(quotation?.note || '')}</textarea>
+                   ${quickNotes()}
+                   <div class="flex items-end justify-between gap-2 mt-4 mb-1 flex-wrap">
+                     <label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant">Condiciones (una por línea)</label>
+                     <button type="button" id="cz-terms-reset" class="btn btn-ghost text-[11px] ${quotation?.terms ? '' : 'hidden'}"><span class="material-symbols-outlined">restart_alt</span>Usar las de siempre</button>
+                   </div>
+                   <textarea id="cz-terms" rows="7" class="w-full p-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20 text-[12px] resize-y">${escapeHtml(quotation?.terms || '')}</textarea>
+                   <p class="text-[11px] text-on-surface-variant mt-1">Cámbielas solo para esta cotización. La línea de vigencia ("válida hasta…") la agrega el PDF. Las de siempre se editan en Ajustes y en Plantillas y tarifas.</p>`
                 )
               : quotation.note
-                ? stepCard(4, 'sticky_note_2', 'Notas y condiciones', '', `<p class="text-body-sm text-on-surface-variant">${escapeHtml(quotation.note)}</p>`)
+                ? stepCard(4, 'sticky_note_2', 'Notas y condiciones', '', `<p class="text-body-sm text-on-surface-variant whitespace-pre-line">${escapeHtml(quotation.note)}</p>`)
                 : ''
           }
+          <div id="cz-images-slot">${imagesSection()}</div>
           ${historyStrip()}
         </div>
 
@@ -881,6 +1120,8 @@ export async function mount(container, ctx) {
     });
     root.querySelectorAll('[data-hist]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        pendingImages.forEach((p) => URL.revokeObjectURL(p.url));
+        pendingImages = [];
         await refreshHistory(Number(btn.dataset.hist));
         render();
       });
@@ -895,6 +1136,8 @@ export async function mount(container, ctx) {
     }
     root.querySelector('#cz-add-line')?.addEventListener('click', () => appendLineRow(list, null, true));
     wireTemplateBar(list);
+    wireImages();
+    wireTerms();
     root.querySelectorAll('[data-quick-note]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const ta = root.querySelector('#cz-note');
@@ -1048,11 +1291,6 @@ export async function mount(container, ctx) {
     }
     const service = findService(service_slug);
     const service_fields = readServiceFields();
-    const missing = service?.fields.find((f) => f.required && !service_fields[f.key]);
-    if (missing) {
-      ctx.toast(`Falta "${missing.label}" para ${service.title}`, 'error');
-      return;
-    }
 
     const fields = {
       client_name: name,
@@ -1083,19 +1321,25 @@ export async function mount(container, ctx) {
         lead = await ctx.api.post('/api/leads', { ...fields, advisor_id: advisorSelect?.value });
         ctx.toast('Cliente registrado', 'success');
       } else {
-        lead = await ctx.api.patch(`/api/leads/${lead.id}`, fields);
+        const advisorId = Number(root.querySelector('#cz-advisor')?.value) || null;
+        const advisorChanged = advisorId && advisorId !== lead.assigned_advisor_id;
+        lead = await ctx.api.patch(`/api/leads/${lead.id}`, advisorChanged ? { ...fields, advisor_id: advisorId } : fields);
+        if (advisorChanged) ctx.toast(`Asesor cambiado a ${lead.advisor_name || 'otro asesor'}`, 'success');
       }
 
       let r;
+      const note = root.querySelector('#cz-note')?.value.trim() ?? undefined;
+      const validity_days = Number(root.querySelector('#cz-validity')?.value) || 8;
+      const terms = termsCustom ? root.querySelector('#cz-terms')?.value.trim() || null : null;
+      const number = root.querySelector('#cz-number')?.value.trim() ?? undefined;
       if (quotation) {
-        r = await ctx.api.put(`/api/quotations/${quotation.id}`, { lines, service_slug, service_fields });
+        r = await ctx.api.put(`/api/quotations/${quotation.id}`, { lines, service_slug, service_fields, note, validity_days, terms, number });
         ctx.toast('Cotización actualizada', 'success');
       } else {
-        const validity_days = Number(root.querySelector('#cz-validity')?.value) || 8;
-        const note = root.querySelector('#cz-note')?.value.trim() || undefined;
-        r = await ctx.api.post(`/api/leads/${lead.id}/quotations`, { lines, validity_days, note, service_slug, service_fields });
+        r = await ctx.api.post(`/api/leads/${lead.id}/quotations`, { lines, validity_days, note: note || undefined, service_slug, service_fields, terms, number });
         ctx.toast('Cotización creada', 'success');
       }
+      await uploadPending(r.quotation.id);
       await refreshHistory(r.quotation.id);
       render();
     } catch (err) {

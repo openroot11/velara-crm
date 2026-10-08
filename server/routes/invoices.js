@@ -8,6 +8,7 @@ const erp = require('../erp');
 const einvoice = require('../einvoice');
 const brand = require('../pdfBrand');
 const { quoteSettings } = require('./quotations');
+const nativeQuotes = require('../nativeQuotes');
 
 // Facturación electrónica (ERP): lo que Velara factura a sus clientes
 // (emitidas = ventas) y lo que le facturan sus proveedores (recibidas =
@@ -148,12 +149,16 @@ router.get('/prefill', async (req, res) => {
   if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
   const client = lead.client_id ? await db.prepare('SELECT * FROM clients WHERE id = ?').get(lead.client_id) : null;
   const quotation = await db.prepare("SELECT * FROM quotations WHERE lead_id = ? AND state != 'cancel' ORDER BY created_at DESC, id DESC").get(lead.id);
+  // Mismo IVA con que se cotizó (hoy VELARA cotiza sin IVA); si no hay
+  // cotización, el de Plantillas y tarifas.
+  const quotedRate = quotation && quotation.amount_untaxed > 0 ? Math.round((quotation.amount_tax / quotation.amount_untaxed) * 100) : null;
+  const ivaRate = einvoice.IVA_RATES.includes(quotedRate) ? quotedRate : Math.round((await nativeQuotes.ivaRate()) * 100);
   const lines = quotation
     ? (await db.prepare('SELECT * FROM quotation_lines WHERE quotation_id = ? ORDER BY position, id').all(quotation.id)).map((l) => ({
         description: l.product_name,
         qty: l.qty,
         unit_price: l.price_unit,
-        iva_rate: 19,
+        iva_rate: einvoice.IVA_RATES.includes(ivaRate) ? ivaRate : 0,
       }))
     : [];
   res.json({

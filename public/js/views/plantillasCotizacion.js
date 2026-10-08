@@ -195,11 +195,12 @@ export async function mount(container, ctx) {
           ['transporte', 'Transporte por defecto', config.transporte, 10000],
           ['impresionLogo', 'Impresión de logo (1 tinta)', config.impresionLogo, 10000],
           ['redondeo', 'Redondear precios a', config.redondeo, 1000],
+          ['iva', 'IVA en cotizaciones (%) · 0 = sin IVA', config.iva ?? 0, 1],
           ['costeo.margen', 'Margen del costeo (0–0,95)', config.costeo.margen, 0.01],
         ])
       )}
 
-      ${card('Catálogo de forros', 'Precios unitarios antes de IVA. Aparecen en la plantilla "Catálogo de forros".', `<div id="pt-catalog">${catalogHtml()}</div>
+      ${card('Catálogo de forros', 'Precios unitarios. Aparecen en la plantilla "Catálogo de forros".', `<div id="pt-catalog">${catalogHtml()}</div>
         <button type="button" id="pt-add-cat" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">add</span>Categoría</button>`)}
 
       ${card(

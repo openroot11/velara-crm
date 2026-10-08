@@ -555,6 +555,23 @@ CREATE TABLE IF NOT EXISTS work_order_files (
 );
 CREATE INDEX IF NOT EXISTS idx_work_order_files_wo ON work_order_files(work_order_id);
 
+-- Imágenes de referencia de una cotización (diseño, foto del sitio, modelo
+-- de carpa...). Salen en el PDF con su leyenda. Archivo en
+-- data/uploads/cotizaciones/<id>/ (siempre JPEG: el navegador la convierte).
+CREATE TABLE IF NOT EXISTS quotation_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  quotation_id INTEGER NOT NULL REFERENCES quotations(id),
+  caption TEXT,
+  original_name TEXT,
+  stored_path TEXT NOT NULL,
+  mime TEXT,
+  size INTEGER,
+  position INTEGER NOT NULL DEFAULT 0,
+  uploaded_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_quotation_images_q ON quotation_images(quotation_id);
+
 CREATE TABLE IF NOT EXISTS recurring_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -1080,6 +1097,9 @@ async function init() {
   // 'seguimiento'/'aprobada' nuevos).
   ensureColumn('quotations', 'service_slug', 'TEXT');
   ensureColumn('quotations', 'service_fields', 'TEXT');
+  // Condiciones escritas a mano para UNA cotización (una por línea). NULL =
+  // usar las de siempre (Ajustes / Plantillas y tarifas según el servicio).
+  ensureColumn('quotations', 'terms', 'TEXT');
   ensureReportsTypeCheck();
   ensureQuotationsStateCheck();
   exec(ERP_SCHEMA_SQL);

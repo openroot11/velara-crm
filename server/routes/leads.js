@@ -755,7 +755,16 @@ router.patch('/:id', async (req, res) => {
   if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
   if (!canEditLead(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso para editar este lead' });
 
-  const { client_name, phone, document, product, notes, city, source, channel_detail, sale_reference, address, email } = req.body || {};
+  const { client_name, phone, document, product, notes, city, source, channel_detail, sale_reference, address, email, advisor_id } = req.body || {};
+  // Cambiar el asesor desde Cotizar (coordinador/admin): es una corrección
+  // de quién atiende, no una reasignación -- no suma penalización ni toca
+  // el estado del embudo.
+  let newAdvisor = null;
+  if (advisor_id !== undefined && Number(advisor_id) !== lead.assigned_advisor_id) {
+    if (req.user.role === 'asesor') return res.status(403).json({ error: 'Solo coordinador o admin pueden cambiar el asesor' });
+    newAdvisor = await db.prepare('SELECT * FROM advisors WHERE id = ? AND active = true').get(Number(advisor_id));
+    if (!newAdvisor) return res.status(400).json({ error: 'Asesor inválido' });
+  }
   if (client_name !== undefined && !client_name.trim()) return res.status(400).json({ error: 'El nombre no puede quedar vacío' });
   if (phone !== undefined && !phone.trim()) return res.status(400).json({ error: 'El teléfono no puede quedar vacío' });
   if (channel_detail !== undefined && channel_detail && !CHANNEL_DETAILS.includes(channel_detail)) {
@@ -781,8 +790,18 @@ router.patch('/:id', async (req, res) => {
       id
     );
 
+  if (newAdvisor) {
+    await db
+      .prepare('UPDATE leads SET assigned_advisor_id = ? WHERE id = ?')
+      .run(newAdvisor.id, id);
+  }
+
   const updated = await db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
   if (notes !== undefined || city !== undefined) await pushOdooDetails(updated);
+  if (newAdvisor) {
+    if (updated.odoo_lead_id) await pushOdooOwner(updated, newAdvisor);
+    else await syncLeadToOdoo(id);
+  }
   broadcast('leads_changed', { reason: 'edited', id });
   res.json(await serialize(updated));
 });
@@ -1047,9 +1066,13 @@ router.post('/:id/quotations', async (req, res) => {
   if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
   if (!canOperateOn(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso sobre este lead' });
 
-  const { lines, validity_days, note, service_slug, service_fields } = req.body || {};
+  const { lines, validity_days, note, service_slug, service_fields, terms, number } = req.body || {};
   const cleanLines = Array.isArray(lines) ? lines.filter((l) => l && l.product_name && Number(l.qty) > 0) : [];
   if (!cleanLines.length) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
+  const wantedNumber = String(number ?? '').trim();
+  if (wantedNumber && (await db.prepare('SELECT id FROM quotations WHERE LOWER(number) = LOWER(?)').get(wantedNumber))) {
+    return res.status(400).json({ error: `Ya existe otra cotización con el número ${wantedNumber}` });
+  }
 
   let cleanServiceFields = null;
   if (service_slug) {
@@ -1062,10 +1085,10 @@ router.post('/:id/quotations', async (req, res) => {
   const validityDate = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 
   const info = await db
-    .prepare('INSERT INTO quotations (lead_id, validity_days, validity_date, note, created_by, service_slug, service_fields) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, days, validityDate, (note && note.trim()) || null, req.user.id || null, service_slug || null, cleanServiceFields);
+    .prepare('INSERT INTO quotations (lead_id, validity_days, validity_date, note, created_by, service_slug, service_fields, terms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, days, validityDate, (note && note.trim()) || null, req.user.id || null, service_slug || null, cleanServiceFields, (terms && String(terms).trim()) || null);
   const quotationId = info.lastInsertRowid;
-  await db.prepare("UPDATE quotations SET number = printf('COT-%04d', id) WHERE id = ?").run(quotationId);
+  await nativeQuotes.setNumber(quotationId, wantedNumber);
   await nativeQuotes.writeLines(quotationId, cleanLines);
 
   const now = nowUtc();
