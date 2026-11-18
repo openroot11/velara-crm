@@ -1078,6 +1078,19 @@ async function init() {
   // por defecto a la línea al elegirlo (el asesor la puede editar o borrar
   // ahí, sin afectar la ficha del producto).
   ensureColumn('products', 'description', 'TEXT');
+  // Cotizador por categorías (estilo Odoo): cada producto pertenece a una
+  // categoría, y la categoría trae su encabezado, garantía y tiempo de
+  // entrega a la cotización. needs_review = producto traído del catálogo
+  // anterior que nadie ha confirmado todavía (no sale en el buscador).
+  exec(QUOTE_CATALOG_SCHEMA_SQL);
+  ensureColumn('products', 'category_id', 'INTEGER REFERENCES product_categories(id)');
+  ensureColumn('products', 'unit', "TEXT NOT NULL DEFAULT 'Unidad'");
+  ensureColumn('products', 'needs_review', 'INTEGER NOT NULL DEFAULT 0');
+  // Líneas de cotización como en Odoo: 'product' (suma), 'section'
+  // (encabezado de una categoría o título libre; product_name = título,
+  // description = encabezado) y 'note' (texto suelto; va en description).
+  ensureColumn('quotation_lines', 'line_type', "TEXT NOT NULL DEFAULT 'product'");
+  ensureColumn('quotation_lines', 'category_id', 'INTEGER REFERENCES product_categories(id)');
   // Integración con Google Ads (ver server/googleAds.js): de dónde vino
   // cada mes de ad_spend ('manual' = lo tecleó alguien en Ajustes,
   // 'google_ads_api' = lo llenó la sincronización sola) -- la sync nunca
@@ -1152,6 +1165,89 @@ async function init() {
   await backfillAccounts();
   await seedIfEmpty();
   await seedQuoteDefaults();
+  await seedProductCategories();
+}
+
+// Categorías y plantillas del cotizador. Van aparte de SCHEMA_SQL porque
+// products ya existía antes y sus columnas nuevas se agregan con
+// ensureColumn() (ver init()).
+const QUOTE_CATALOG_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS product_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  -- Servicio del sitio al que corresponde (velaraServices.js), o NULL.
+  service_slug TEXT,
+  -- Texto que abre la sección de esta categoría en la cotización.
+  header TEXT,
+  warranty TEXT,
+  lead_time TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Plantillas de cotización (como sale.order.template de Odoo): un grupo de
+-- líneas listo (productos, secciones, notas) que se aplica de un clic.
+-- lines = JSON [{ line_type, product_id, product_name, description, qty,
+-- price_unit, discount_percent, category_id }].
+CREATE TABLE IF NOT EXISTS quote_presets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  lines TEXT NOT NULL DEFAULT '[]',
+  validity_days INTEGER,
+  note TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+// Primera vez: una categoría por servicio de Velara, con el texto del sitio
+// (sitio/src/data/services.ts, "description") como encabezado y la garantía
+// y el tiempo de entrega que ya tenía Plantillas y tarifas. Después se
+// editan en Cotizaciones › Catálogo; no se vuelve a sembrar.
+const SEED_CATEGORIES = [
+  {
+    slug: 'forros-para-carros',
+    name: 'Forros para carros',
+    header: 'Forros a la medida para asientos, puertas y techo. Patrón levantado sobre su carro — no una talla genérica de tienda — con entrega rápida.',
+  },
+  {
+    slug: 'tapizado-automotriz',
+    name: 'Tapizado automotriz',
+    header: 'Sillas, paneles, techos y timones. Patronaje a la medida del vehículo y costura que respeta el diseño original.',
+  },
+  {
+    slug: 'tapizado-de-motos',
+    name: 'Tapizado de motos',
+    header: 'Reconstruimos el sillín desde la base: espuma, forma y material tratado para aguantar sol, lluvia y kilómetros.',
+  },
+  {
+    slug: 'carpas-para-negocio',
+    name: 'Carpas y toldos para negocio',
+    header: 'Lona técnica cortada y reforzada a la medida. Medimos en su local, confeccionamos con refuerzos y montamos para que aguante a la intemperie.',
+  },
+  {
+    slug: 'forros',
+    name: 'Forros de protección para equipos',
+    header: 'Forros de protección para equipos médicos, equipos de sonido y maquinaria, hechos sobre la medida real de cada pieza.',
+  },
+];
+
+async function seedProductCategories() {
+  const row = await db.prepare('SELECT COUNT(*) AS c FROM product_categories').get();
+  if (row.c > 0) return;
+  // Require tardío: quoteTemplates.js también requiere este archivo.
+  const { getConfig } = require('./quoteTemplates');
+  const cfg = await getConfig();
+  const insert = db.prepare('INSERT INTO product_categories (name, service_slug, header, warranty, lead_time, position) VALUES (?, ?, ?, ?, ?, ?)');
+  for (let i = 0; i < SEED_CATEGORIES.length; i++) {
+    const c = SEED_CATEGORIES[i];
+    await insert.run(c.name, c.slug, c.header, cfg.garantias?.[c.slug] || null, cfg.tiempos?.[c.slug] || null, i + 1);
+  }
 }
 
 module.exports = { db, getSetting, setSetting, DEFAULT_ADVISORS, DATA_DIR, init };

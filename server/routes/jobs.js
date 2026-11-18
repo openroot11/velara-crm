@@ -238,7 +238,7 @@ router.post('/from-quotation', manage, async (req, res) => {
       }
       await db.prepare("UPDATE quotations SET state = 'sale', updated_at = datetime('now') WHERE id = ?").run(quotation.id);
       const service = velaraServices.findService(quotation.service_slug);
-      const description = quotation.lines.map((l) => `${Number(l.qty) || 1} × ${l.product_name}${l.description ? ` (${l.description})` : ''}`).join('\n');
+      const description = quotation.lines.filter((l) => (l.line_type || 'product') === 'product').map((l) => `${Number(l.qty) || 1} × ${l.product_name}${l.description ? ` (${l.description})` : ''}`).join('\n');
       return insertJob(
         {
           quotation_id: quotation.id,

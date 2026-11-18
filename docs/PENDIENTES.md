@@ -12,7 +12,7 @@
 ## Arreglos del sistema, en orden (de la auditoría)
 1. [ ] **Backups completos** (copiar la base entera con `VACUUM INTO`) y sin la clave de sesión. Hoy el backup no guarda abonos, clientes, cotizaciones, producción, inventario, caja ni facturas.
 2. [ ] **Seguridad**: escapar títulos de modales y nombres (inyección de código por nombre de cliente), restringir tipo de archivos subidos a las OP, sacar al rol Producción de las rutas comerciales, que un asesor solo edite sus clientes, pedir sesión en el WebSocket.
-3. [ ] **IVA según el régimen** (hoy 19 % fijo en cotizaciones y facturas) y definir si el monto del lead va con o sin IVA.
+3. [ ] **IVA según el régimen**: desde 2026-10-08 es configurable (Plantillas y tarifas › IVA en cotizaciones, hoy 0 %); cotizaciones, trabajos, rentabilidad y prefactura usan ese valor. Falta confirmar con el contador y definir si el monto del lead va con o sin IVA.
 4. [ ] **Un solo cobro**: ligar factura de venta ↔ abono ↔ Caja, una sola cartera, evitar facturar dos veces la misma venta.
 5. [ ] **Días en hora de Colombia** en informes y filtros (hoy cortan a las 7 p.m.).
 6. [ ] **Quitar el filtro "solo Google Ads"** (`leads_visible`) y no cambiar el canal a Google Ads al cerrar una venta.

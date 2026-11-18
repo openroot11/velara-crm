@@ -76,6 +76,8 @@ async function main() {
   // Cotizaciones nativas de Nova (pestaña "Cotizar") -- sin Odoo de por
   // medio, ver server/nativeQuotes.js.
   app.use('/api/products', require('./routes/products'));
+  app.use('/api/product-categories', require('./routes/productCategories'));
+  app.use('/api/quote-presets', require('./routes/quotePresets'));
   app.use('/api/quotations', require('./routes/quotations'));
   app.use('/api/quote-templates', require('./routes/quoteTemplates'));
   // Producción: pedidos, órdenes de producción, tareas, archivos, bloqueos,

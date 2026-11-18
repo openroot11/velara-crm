@@ -9,14 +9,31 @@ export const APPS = [
     // Ventas: un embudo por etapas en lugar de Leads/Seguimiento/
     // Cotizaciones/Ventas cerradas (pensadas para un equipo de asesores);
     // esas pantallas siguen existiendo pero salen del menú.
+    // CRM (como el CRM de Odoo): el flujo por etapas, los equipos de cada
+    // vendedor y los clientes. "menus" = cómo se agrupan en la barra de
+    // arriba (un grupo con label abre un desplegable).
     key: 'comercial',
-    label: 'Ventas',
-    desc: 'Clientes interesados, cotizaciones y ventas',
-    icon: 'storefront',
+    label: 'CRM',
+    desc: 'Clientes interesados, flujo de ventas y equipos',
+    icon: 'handshake',
     color: '#E4572E',
     routes: [
-      ['embudo', 'Embudo'],
+      ['embudo', 'Flujo'],
+      ['equipos', 'Equipos'],
       ['clientes', 'Clientes'],
+      // Cifras y tabla de clientes (era el Inicio antes de la cuadrícula).
+      ['resumen', 'Resumen'],
+    ],
+    menus: [
+      {
+        label: 'Ventas',
+        items: [
+          ['embudo', 'Mi flujo'],
+          ['equipos', 'Equipos'],
+          ['clientes', 'Clientes'],
+        ],
+      },
+      ['resumen', 'Resumen'],
     ],
     // Fuera del menú (minimalismo): la pantalla sigue existiendo.
     hidden: [
@@ -39,6 +56,7 @@ export const APPS = [
     routes: [
       ['cotizar', 'Nueva cotización'],
       ['cotizaciones', 'Cotizaciones'],
+      ['catalogo', 'Catálogo'],
     ],
   },
   {
@@ -132,12 +150,15 @@ export const NAV = [
     items: [['inicio', 'Inicio', 'home']],
   },
   {
-    label: 'Ventas',
+    label: 'CRM',
     items: [
-      ['embudo', 'Embudo', 'filter_alt'],
+      ['resumen', 'Resumen', 'space_dashboard'],
+      ['embudo', 'Flujo', 'view_kanban'],
+      ['equipos', 'Equipos', 'groups'],
       ['clientes', 'Clientes', 'group'],
       ['cotizar', 'Nueva cotización', 'add_notes'],
       ['cotizaciones', 'Cotizaciones', 'request_quote'],
+      ['catalogo', 'Catálogo', 'category'],
     ],
   },
   {
@@ -170,12 +191,12 @@ export const NAV = [
 // de Inventario y los operarios; no ve finanzas ni el embudo comercial.
 const PRODUCCION = ['trabajos', 'produccion', 'pedidos', 'programacion', 'op', 'solicitudes-material', 'garantias', 'reportes-produccion'];
 export const ROUTES_BY_ROLE = {
-  admin: ['inicio', 'embudo', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
-  coordinador: ['inicio', 'embudo', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
+  admin: ['inicio', 'resumen', 'embudo', 'equipos', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'catalogo', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'reporte', 'asesores', 'operarios', 'ajustes'],
+  coordinador: ['inicio', 'resumen', 'embudo', 'equipos', 'manual', 'dashboard1', 'dashboard', 'ventas', 'seguimiento', 'cotizaciones', 'cotizar', 'catalogo', 'plantillas-cotizacion', ...PRODUCCION, 'inventario', 'compras', 'finanzas', 'facturacion', 'clientes', 'informe', 'ventas-cerradas', 'estadisticas', 'asesores', 'operarios'],
   produccion: ['inicio', ...PRODUCCION, 'inventario', 'operarios'],
   // Un asesor opera lo suyo: su embudo comercial y el avance en producción
   // de sus clientes (el backend le filtra las OP a las de sus leads).
-  asesor: ['inicio', 'embudo', 'manual', 'ventas', 'cotizaciones', 'cotizar', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
+  asesor: ['inicio', 'resumen', 'embudo', 'equipos', 'manual', 'ventas', 'cotizaciones', 'cotizar', 'catalogo', 'clientes', 'produccion', 'pedidos', 'op', 'garantias', 'inventario'],
 };
 
 const LABELS = { inicio: 'Inicio' };

@@ -1067,8 +1067,8 @@ router.post('/:id/quotations', async (req, res) => {
   if (!canOperateOn(req.user, lead)) return res.status(403).json({ error: 'No tienes permiso sobre este lead' });
 
   const { lines, validity_days, note, service_slug, service_fields, terms, number } = req.body || {};
-  const cleanLines = Array.isArray(lines) ? lines.filter((l) => l && l.product_name && Number(l.qty) > 0) : [];
-  if (!cleanLines.length) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
+  const cleanLines = nativeQuotes.cleanLines(lines);
+  if (!cleanLines) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
   const wantedNumber = String(number ?? '').trim();
   if (wantedNumber && (await db.prepare('SELECT id FROM quotations WHERE LOWER(number) = LOWER(?)').get(wantedNumber))) {
     return res.status(400).json({ error: `Ya existe otra cotización con el número ${wantedNumber}` });

@@ -3,6 +3,7 @@ import { openCloseModal } from '../components/leadActions.js';
 import { SERVICES, findService } from '../data/velaraServices.js';
 import { TEMPLATES } from '../data/quoteTemplates.js';
 import { openTemplateModal } from '../components/quoteTemplateModal.js';
+import { openModal } from '../components/modal.js';
 
 // Pestaña "Cotizar": motor de cotizaciones propio de Velara CRM, sin
 // ninguna dependencia de Odoo -- guarda todo en las tablas nativas del CRM
@@ -163,6 +164,9 @@ export async function mount(container, ctx) {
   // Condiciones: true = el asesor las escribió para esta cotización; false =
   // se muestran las de siempre del servicio (y se recargan si cambia).
   let termsCustom = false;
+  // Datos del cliente: arrancan plegados (solo el buscador, o el resumen del
+  // cliente elegido); se despliegan con "Cliente nuevo" o "Editar datos".
+  let clientFormOpen = false;
   // Tarifas, catálogo y observaciones de las plantillas (Cotizaciones ›
   // Plantillas y tarifas). Sin esto la pantalla funciona igual, solo sin
   // la barra de plantillas.
@@ -171,6 +175,15 @@ export async function mount(container, ctx) {
     templateConfig = (await ctx.api.get('/api/quote-templates')).config;
   } catch {
     templateConfig = null;
+  }
+  // Catálogo (Cotizaciones › Catálogo): categorías con su encabezado,
+  // garantía y tiempo de entrega, y plantillas de cotización.
+  let categories = [];
+  let presets = [];
+  try {
+    [categories, presets] = await Promise.all([ctx.api.get('/api/product-categories'), ctx.api.get('/api/quote-presets')]);
+  } catch {
+    /* sin catálogo la pantalla funciona igual, con líneas libres */
   }
   if (ctx.user?.role !== 'asesor') {
     try {
@@ -211,6 +224,7 @@ export async function mount(container, ctx) {
     history = [];
     selectedServiceSlug = null;
     serviceFieldValues = {};
+    clientFormOpen = false;
     render();
   }
 
@@ -332,25 +346,147 @@ export async function mount(container, ctx) {
     });
   }
 
-  // ---- líneas de producto -----------------------------------------------------
-  function computeClientTotals(list) {
-    let sub = 0;
-    list.querySelectorAll('[data-line]').forEach((row) => {
-      const qtyEl = row.querySelector('[data-qty]');
-      if (!qtyEl) return; // fila de solo lectura (cotización confirmada)
-      const qty = Number(qtyEl.value) || 0;
-      const priceRaw = row.querySelector('[data-price]').value;
-      const price = priceRaw === '' ? Number(row.dataset.listPrice || 0) : Number(priceRaw);
-      const discount = Math.min(100, Math.max(0, Number(row.querySelector('[data-discount]')?.value) || 0));
-      sub += qty * price * (1 - discount / 100);
+  // ---- líneas: productos, secciones y notas (como en Odoo) -------------------
+  // Cada fila lleva data-type = product | section | note. Un producto del
+  // catálogo trae su categoría: al elegirlo, la cotización abre sola la
+  // sección de esa categoría (con su encabezado) y lo pone debajo; si se
+  // quita el último producto de una categoría, su sección también sale. La
+  // garantía y el tiempo de entrega de cada categoría salen en el PDF.
+  const linesEl = () => root.querySelector('#cz-lines');
+
+  function categoryById(id) {
+    return categories.find((c) => c.id === Number(id)) || null;
+  }
+
+  // Sección a la que pertenece una fila: la más cercana hacia arriba.
+  function sectionOf(row) {
+    let el = row.previousElementSibling;
+    while (el) {
+      if (el.dataset.type === 'section') return el;
+      el = el.previousElementSibling;
+    }
+    return null;
+  }
+
+  // Elemento antes del cual se inserta para quedar al final de una sección
+  // (la siguiente sección, o null = final de la lista).
+  function groupEnd(section) {
+    let el = section.nextElementSibling;
+    while (el && el.dataset.type !== 'section') el = el.nextElementSibling;
+    return el;
+  }
+
+  function pruneSections(list) {
+    list.querySelectorAll('[data-type="section"][data-category-id]').forEach((s) => {
+      let el = s.nextElementSibling;
+      while (el && el.dataset.type !== 'section') {
+        if (el.dataset.type === 'product') return;
+        el = el.nextElementSibling;
+      }
+      s.remove();
     });
-    return sub;
+  }
+
+  // Pone un producto con categoría dentro de la sección de su categoría
+  // (creándola al final si no existe). Si ya está en ella, no lo mueve.
+  function placeInCategory(list, row) {
+    const cat = categoryById(row.dataset.categoryId);
+    if (!cat) return;
+    let section = list.querySelector(`[data-type="section"][data-category-id="${cat.id}"]`);
+    if (section && sectionOf(row) === section) return;
+    if (!section) {
+      section = buildSectionRow({ product_name: cat.name, description: cat.header, category_id: cat.id }, true);
+      list.appendChild(section);
+      autoGrow(section.querySelector('[data-sec-header]'));
+    }
+    list.insertBefore(row, groupEnd(section));
+    pruneSections(list);
+  }
+
+  function rowSubtotal(row) {
+    if (row.dataset.type !== 'product') return 0;
+    const qtyEl = row.querySelector('[data-qty]');
+    if (!qtyEl) return Number(row.dataset.subtotal || 0); // fila de solo lectura
+    const qty = Number(qtyEl.value) || 0;
+    const priceRaw = row.querySelector('[data-price]').value;
+    const price = priceRaw === '' ? Number(row.dataset.listPrice || 0) : Number(priceRaw);
+    const discount = Math.min(100, Math.max(0, Number(row.querySelector('[data-discount]')?.value) || 0));
+    return qty * price * (1 - discount / 100);
+  }
+
+  function computeClientTotals(list) {
+    return [...list.querySelectorAll('[data-line]')].reduce((s, row) => s + rowSubtotal(row), 0);
+  }
+
+  // Subtotal de cada sección = sus productos hasta la siguiente sección.
+  function renderSectionTotals(list) {
+    let current = null;
+    let sum = 0;
+    const flush = () => {
+      if (current) current.querySelector('[data-sec-total]').textContent = formatMoney(sum);
+    };
+    list.querySelectorAll('[data-line]').forEach((row) => {
+      if (row.dataset.type === 'section') {
+        flush();
+        current = row;
+        sum = 0;
+      } else {
+        sum += rowSubtotal(row);
+      }
+    });
+    flush();
+  }
+
+  // Categorías presentes, en el orden en que salen (para el cuadro de
+  // garantías y para saber si las condiciones llevan la garantía aparte).
+  function presentCategories(list) {
+    const ids = [];
+    list?.querySelectorAll('[data-category-id]').forEach((row) => {
+      const id = Number(row.dataset.categoryId);
+      if (id && !ids.includes(id)) ids.push(id);
+    });
+    return ids.map(categoryById).filter(Boolean);
+  }
+
+  let lastByCategory = null;
+  function renderPolicies(list) {
+    const box = root.querySelector('#cz-policies');
+    const cats = presentCategories(list).filter((c) => c.warranty || c.lead_time);
+    const byCategory = cats.length > 0;
+    if (lastByCategory !== null && byCategory !== lastByCategory) loadDefaultTerms();
+    lastByCategory = byCategory;
+    if (!box) return;
+    if (!cats.length) {
+      box.innerHTML = '';
+      return;
+    }
+    const canEditCatalog = ctx.user?.role !== 'asesor';
+    box.innerHTML = `
+      <div class="mt-3 p-3 rounded-lg border border-outline-variant bg-surface-container-lowest">
+        <div class="flex items-center gap-1.5 mb-1.5">
+          <span class="material-symbols-outlined text-[16px] text-on-surface-variant">verified_user</span>
+          <p class="text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant">Garantía y tiempo de entrega (salen en el PDF)</p>
+          ${canEditCatalog ? '<a href="#/catalogo?tab=categorias" class="ml-auto text-[11px] text-on-surface-variant hover:underline">Editar en Catálogo</a>' : ''}
+        </div>
+        <ul class="text-[12px] text-on-surface space-y-0.5">
+          ${cats
+            .map(
+              (c) =>
+                `<li><b>${escapeHtml(c.name)}:</b> ${[c.warranty ? `garantía de ${escapeHtml(c.warranty)}` : '', c.lead_time ? `entrega en ${escapeHtml(c.lead_time)}` : '']
+                  .filter(Boolean)
+                  .join(' · ')}</li>`
+            )
+            .join('')}
+        </ul>
+      </div>`;
   }
 
   function renderTotals() {
     const totalsEl = root.querySelector('#cz-totals');
-    const list = root.querySelector('#cz-lines');
+    const list = linesEl();
     if (!totalsEl || !list) return;
+    renderSectionTotals(list);
+    renderPolicies(list);
     const totalsHtml = (sub, iva, label) => `
       ${
         iva > 0
@@ -369,7 +505,7 @@ export async function mount(container, ctx) {
     const pct = ivaPct(templateConfig);
     totalsEl.innerHTML = totalsHtml(sub, (sub * pct) / 100, `IVA ${pct}%`);
     const countEl = root.querySelector('#cz-line-count');
-    if (countEl) countEl.textContent = list.querySelectorAll('[data-line]').length;
+    if (countEl) countEl.textContent = list.querySelectorAll('[data-type="product"]').length;
   }
 
   function moveRow(row, dir) {
@@ -380,21 +516,120 @@ export async function mount(container, ctx) {
     renderTotals();
   }
 
-  function appendLineRow(list, preset, editable) {
+  function removeRow(row) {
+    row.remove();
+    const list = linesEl();
+    if (list) pruneSections(list);
+    renderTotals();
+  }
+
+  const MOVE_BTNS = `
+    <div class="flex flex-col gap-0.5 pt-1 shrink-0">
+      <button type="button" data-move-up class="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low" aria-label="Subir"><span class="material-symbols-outlined text-[16px]">keyboard_arrow_up</span></button>
+      <button type="button" data-move-down class="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low" aria-label="Bajar"><span class="material-symbols-outlined text-[16px]">keyboard_arrow_down</span></button>
+    </div>`;
+
+  function wireRowControls(row) {
+    row.querySelector('[data-move-up]')?.addEventListener('click', () => moveRow(row, 'up'));
+    row.querySelector('[data-move-down]')?.addEventListener('click', () => moveRow(row, 'down'));
+    row.querySelector('[data-del]')?.addEventListener('click', () => removeRow(row));
+  }
+
+  // Sección: título + encabezado. Si es de una categoría, lleva su nombre
+  // y se crea/quita sola; una sección libre la agrega el asesor a mano.
+  function buildSectionRow(preset, editable) {
     const row = document.createElement('div');
     row.dataset.line = '';
+    row.dataset.type = 'section';
+    if (preset?.category_id) row.dataset.categoryId = preset.category_id;
+    row.className = 'rounded-lg p-3 mb-2 mt-3 first:mt-0 bg-surface-container-low border border-outline-variant border-l-4 border-l-on-surface';
+    const cat = preset?.category_id ? categoryById(preset.category_id) : null;
+    const chip = cat || preset?.category_id ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface-container-high text-on-surface-variant shrink-0">Categoría</span>' : '';
+    if (!editable) {
+      row.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-bold text-on-surface">${escapeHtml(preset.product_name || '')}</p>
+            ${preset.description ? `<p class="text-[12px] text-on-surface-variant mt-0.5 whitespace-pre-line">${escapeHtml(preset.description)}</p>` : ''}
+          </div>
+          <p data-sec-total class="font-bold text-on-surface shrink-0"></p>
+        </div>`;
+      return row;
+    }
+    row.innerHTML = `
+      <div class="flex items-start gap-2">
+        ${MOVE_BTNS}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0">view_agenda</span>
+            <input data-sec-title type="text" placeholder="Título de la sección" class="flex-1 min-w-0 p-1.5 border border-transparent hover:border-outline-variant focus:border-outline rounded-md outline-none bg-transparent font-bold text-on-surface" />
+            ${chip}
+            <span data-sec-total class="font-bold text-on-surface shrink-0 text-body-sm"></span>
+          </div>
+          <textarea data-sec-header rows="1" placeholder="Encabezado de la sección (opcional)" class="w-full p-1.5 mt-1 border border-transparent hover:border-outline-variant focus:border-outline rounded-md outline-none bg-transparent text-[12px] text-on-surface-variant resize-none"></textarea>
+        </div>
+        <button type="button" data-del class="btn btn-icon shrink-0" aria-label="Quitar sección"><span class="material-symbols-outlined">delete</span></button>
+      </div>`;
+    row.querySelector('[data-sec-title]').value = preset?.product_name || '';
+    const header = row.querySelector('[data-sec-header]');
+    header.value = preset?.description || '';
+    header.addEventListener('input', () => autoGrow(header));
+    wireRowControls(row);
+    return row;
+  }
+
+  function buildNoteRow(preset, editable) {
+    const row = document.createElement('div');
+    row.dataset.line = '';
+    row.dataset.type = 'note';
+    row.className = 'rounded-lg p-2 mb-2 border border-dashed border-outline-variant';
+    if (!editable) {
+      row.innerHTML = `<p class="text-[12px] text-on-surface-variant whitespace-pre-line flex gap-1.5"><span class="material-symbols-outlined text-[16px]">sticky_note_2</span>${escapeHtml(preset.description || '')}</p>`;
+      return row;
+    }
+    row.innerHTML = `
+      <div class="flex items-start gap-2">
+        ${MOVE_BTNS}
+        <span class="material-symbols-outlined text-[18px] text-on-surface-variant pt-1.5 shrink-0">sticky_note_2</span>
+        <textarea data-note rows="1" placeholder="Nota: sale en el PDF a todo lo ancho (aclaraciones, lo que no incluye…)" class="flex-1 min-w-0 p-1.5 border border-transparent hover:border-outline-variant focus:border-outline rounded-md outline-none bg-transparent text-[12px] text-on-surface resize-none"></textarea>
+        <button type="button" data-del class="btn btn-icon shrink-0" aria-label="Quitar nota"><span class="material-symbols-outlined">delete</span></button>
+      </div>`;
+    const ta = row.querySelector('[data-note]');
+    ta.value = preset?.description || '';
+    ta.addEventListener('input', () => autoGrow(ta));
+    wireRowControls(row);
+    return row;
+  }
+
+  function setRowCategory(row, categoryId) {
+    const cat = categoryById(categoryId);
+    if (cat) row.dataset.categoryId = cat.id;
+    else delete row.dataset.categoryId;
+    const chip = row.querySelector('[data-cat-chip]');
+    if (chip) {
+      chip.textContent = cat ? cat.name : '';
+      chip.classList.toggle('hidden', !cat);
+    }
+  }
+
+  function buildProductRow(preset, editable) {
+    const row = document.createElement('div');
+    row.dataset.line = '';
+    row.dataset.type = 'product';
     row.className = 'border border-outline-variant rounded-lg p-3 mb-2 bg-surface-container-lowest';
     if (preset && preset.price_unit != null) row.dataset.listPrice = Math.round(preset.price_unit);
+    if (preset?.category_id) row.dataset.categoryId = preset.category_id;
 
     if (!editable) {
       const discount = Number(preset.discount_percent) || 0;
+      row.dataset.subtotal = preset.subtotal ?? preset.qty * preset.price_unit;
       row.innerHTML = `
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="font-bold text-on-surface truncate">${escapeHtml(preset.product_name || '—')}</p>
             ${preset.description ? `<p class="text-[12px] text-on-surface-variant mt-0.5">${escapeHtml(preset.description)}</p>` : ''}
           </div>
-          <p class="font-bold text-on-surface shrink-0">${formatMoney(preset.subtotal ?? preset.qty * preset.price_unit)}</p>
+          <p class="font-bold text-on-surface shrink-0">${formatMoney(row.dataset.subtotal)}</p>
         </div>
         <div class="flex items-center gap-3 mt-2 text-[12px] text-on-surface-variant">
           <span>${preset.qty} Unidades</span>
@@ -402,22 +637,19 @@ export async function mount(container, ctx) {
           ${discount > 0 ? `<span class="text-error font-bold">− ${discount}%</span>` : ''}
         </div>
       `;
-      list.appendChild(row);
-      return;
+      return row;
     }
 
     row.innerHTML = `
       <div class="flex items-start gap-2">
-        <div class="flex flex-col gap-0.5 pt-1.5 shrink-0">
-          <button type="button" data-move-up class="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low" aria-label="Subir"><span class="material-symbols-outlined text-[16px]">keyboard_arrow_up</span></button>
-          <button type="button" data-move-down class="p-0.5 rounded text-on-surface-variant hover:bg-surface-container-low" aria-label="Bajar"><span class="material-symbols-outlined text-[16px]">keyboard_arrow_down</span></button>
-        </div>
+        ${MOVE_BTNS}
         <div class="flex-1 min-w-0">
           <div class="relative">
-            <input data-prod-search type="text" autocomplete="off" placeholder="Buscar producto o escribir uno nuevo…" class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm font-bold" />
+            <input data-prod-search type="text" autocomplete="off" placeholder="Buscar en el catálogo o escribir un concepto…" class="w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm font-bold" />
             <input data-prod type="hidden" />
-            <div data-prod-results class="hidden fixed z-[9999] bg-surface border border-outline-variant rounded-md shadow-lg max-h-52 overflow-y-auto"></div>
+            <div data-prod-results class="hidden fixed z-[9999] bg-surface border border-outline-variant rounded-md shadow-lg max-h-64 overflow-y-auto"></div>
           </div>
+          <span data-cat-chip class="hidden inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface-container-high text-on-surface-variant"></span>
           <textarea data-description rows="2" placeholder="Descripción: medidas, material, color, lo que incluye… (se puede escribir libremente)" class="w-full p-2 mt-1.5 border border-outline-variant rounded-md focus:border-outline text-[12px] text-on-surface outline-none bg-surface resize-y"></textarea>
           <div class="flex items-end gap-3 mt-2 flex-wrap">
             <div>
@@ -456,28 +688,28 @@ export async function mount(container, ctx) {
     const subtotalCell = row.querySelector('[data-subtotal]');
 
     function recalcRow() {
-      const q = Number(qty.value) || 0;
-      const p = price.value === '' ? Number(row.dataset.listPrice || 0) : Number(price.value);
-      const d = Math.min(100, Math.max(0, Number(discountInput.value) || 0));
-      subtotalCell.textContent = formatMoney(q * p * (1 - d / 100));
+      subtotalCell.textContent = formatMoney(rowSubtotal(row));
       renderTotals();
     }
 
+    // Elegir un producto del catálogo: llega con su precio y su descripción
+    // de venta, y se va a la sección de su categoría.
     function pick(p) {
       hidden.value = p.id;
       search.value = p.name;
       row.dataset.listPrice = p.price || 0;
       price.value = Math.round(p.price || 0) || '';
-      if (p.description && !description.value) description.value = p.description;
+      description.value = p.description || '';
+      autoGrow(description);
       results.classList.add('hidden');
+      setRowCategory(row, p.category_id);
+      const list = linesEl();
+      if (list && row.isConnected) placeInCategory(list, row);
       recalcRow();
     }
 
-    // La fila vive en una lista que puede desplazarse en pantallas angostas
-    // -- por la regla CSS de que overflow-x/overflow-y quedan atados entre
-    // sí, un `position: absolute` que se salga del alto de la fila se
-    // recortaría. Con `position: fixed` y coordenadas calculadas a mano el
-    // desplegable se pinta sobre el viewport, fuera de ese recorte.
+    // position: fixed + coordenadas a mano para que el desplegable no lo
+    // recorte el overflow de la lista en pantallas angostas.
     function showResults() {
       const rect = search.getBoundingClientRect();
       results.style.left = `${rect.left}px`;
@@ -486,6 +718,7 @@ export async function mount(container, ctx) {
       results.classList.remove('hidden');
     }
 
+    let found = [];
     let deb;
     search.addEventListener('input', () => {
       hidden.value = ''; // cambió el texto -> ya no hay producto del catálogo elegido hasta que pinche uno
@@ -496,31 +729,33 @@ export async function mount(container, ctx) {
         return;
       }
       deb = setTimeout(async () => {
-        let list2 = [];
         try {
-          list2 = await ctx.api.get(`/api/products?q=${encodeURIComponent(term)}`);
+          found = await ctx.api.get(`/api/products?q=${encodeURIComponent(term)}`);
         } catch {
           return;
         }
-        if (!list2.length) {
-          results.innerHTML = '<p class="px-3 py-2 text-[11px] text-on-surface-variant">Sin resultados en la lista de precios — puedes dejar el nombre escrito y poner el precio a mano</p>';
+        if (!found.length) {
+          results.innerHTML = '<p class="px-3 py-2 text-[11px] text-on-surface-variant">No está en el catálogo — puedes dejar el nombre escrito y poner el precio a mano</p>';
           showResults();
           return;
         }
-        results.innerHTML = list2
+        results.innerHTML = found
           .slice(0, 30)
           .map(
-            (p) =>
-              `<button type="button" data-pid="${p.id}" data-pname="${escapeHtml(p.name)}" data-pprice="${p.price || 0}" data-pdesc="${escapeHtml(p.description || '')}" class="w-full text-left px-3 py-1.5 hover:bg-surface-container-low text-body-sm flex justify-between gap-2"><span class="truncate">${escapeHtml(p.name)}</span>${p.price ? `<span class="shrink-0 text-on-surface-variant">${formatMoney(p.price)}</span>` : ''}</button>`
+            (p, i) =>
+              `<button type="button" data-pick="${i}" class="w-full text-left px-3 py-1.5 hover:bg-surface-container-low text-body-sm flex justify-between gap-2">
+                 <span class="min-w-0"><span class="block truncate">${escapeHtml(p.name)}</span>${p.category_name ? `<span class="block text-[10px] text-on-surface-variant truncate">${escapeHtml(p.category_name)}</span>` : ''}</span>
+                 ${p.price ? `<span class="shrink-0 text-on-surface-variant">${formatMoney(p.price)}</span>` : ''}
+               </button>`
           )
           .join('');
         showResults();
       }, 250);
     });
+    results.addEventListener('mousedown', (e) => e.preventDefault()); // que el blur no cierre antes del clic
     results.addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-pid]');
-      if (!b) return;
-      pick({ id: Number(b.dataset.pid), name: b.dataset.pname, price: Number(b.dataset.pprice), description: b.dataset.pdesc });
+      const b = e.target.closest('button[data-pick]');
+      if (b) pick(found[Number(b.dataset.pick)]);
     });
     search.addEventListener('blur', () => setTimeout(() => results.classList.add('hidden'), 150));
     description.addEventListener('input', () => autoGrow(description));
@@ -535,12 +770,7 @@ export async function mount(container, ctx) {
       qty.value = (Number(qty.value) || 0) + 1;
       recalcRow();
     });
-    row.querySelector('[data-del]').addEventListener('click', () => {
-      row.remove();
-      renderTotals();
-    });
-    row.querySelector('[data-move-up]').addEventListener('click', () => moveRow(row, 'up'));
-    row.querySelector('[data-move-down]').addEventListener('click', () => moveRow(row, 'down'));
+    wireRowControls(row);
 
     if (preset) {
       if (preset.product_id) hidden.value = preset.product_id;
@@ -549,35 +779,164 @@ export async function mount(container, ctx) {
       if (preset.qty != null) qty.value = preset.qty;
       if (preset.price_unit != null) price.value = Math.round(preset.price_unit);
       if (preset.discount_percent) discountInput.value = preset.discount_percent;
+      setRowCategory(row, preset.category_id);
     }
+    row._recalc = recalcRow;
+    return row;
+  }
 
+  // Agrega una fila al final de la lista. place = true: si es un producto
+  // con categoría, lo lleva a la sección de su categoría (al cargar una
+  // cotización guardada se respeta el orden tal cual, sin mover nada).
+  function appendLineRow(list, preset, editable, { place = false } = {}) {
+    const type = preset?.line_type || 'product';
+    const row = type === 'section' ? buildSectionRow(preset, editable) : type === 'note' ? buildNoteRow(preset, editable) : buildProductRow(preset, editable);
     list.appendChild(row);
-    autoGrow(description);
-    recalcRow();
+    row.querySelectorAll('textarea').forEach(autoGrow);
+    if (place && type === 'product') placeInCategory(list, row);
+    if (row._recalc) row._recalc();
+    else renderTotals();
+    return row;
   }
 
   // El nombre del producto es texto libre (no depende de tener un
-  // product_id del catálogo): asi una línea puede ser "Instalación" o
-  // cualquier cosa que no esté en la lista de precios, con el precio puesto
-  // a mano -- mismo criterio de "precios manuales" que ya usa el resto del CRM.
+  // product_id del catálogo): una línea puede ser "Instalación" o cualquier
+  // cosa que no esté en el catálogo, con el precio puesto a mano.
   function readLines(list) {
     return [...list.querySelectorAll('[data-line]')]
       .map((row) => {
+        const category_id = Number(row.dataset.categoryId) || null;
+        if (row.dataset.type === 'section') {
+          const title = row.querySelector('[data-sec-title]');
+          if (!title) return null;
+          return { line_type: 'section', category_id, product_name: title.value.trim(), description: row.querySelector('[data-sec-header]').value.trim() || null };
+        }
+        if (row.dataset.type === 'note') {
+          const ta = row.querySelector('[data-note]');
+          return ta ? { line_type: 'note', category_id: null, description: ta.value.trim() } : null;
+        }
         const prodInput = row.querySelector('[data-prod]');
         if (!prodInput) return null;
-        const search = row.querySelector('[data-prod-search]');
         const priceRaw = row.querySelector('[data-price]').value;
-        const listPrice = Number(row.dataset.listPrice || 0);
         return {
+          line_type: 'product',
+          category_id,
           product_id: Number(prodInput.value) || null,
-          product_name: search.value.trim(),
+          product_name: row.querySelector('[data-prod-search]').value.trim(),
           description: row.querySelector('[data-description]').value.trim() || null,
           qty: Number(row.querySelector('[data-qty]').value) || 0,
-          price_unit: priceRaw === '' ? listPrice : Number(priceRaw),
+          price_unit: priceRaw === '' ? Number(row.dataset.listPrice || 0) : Number(priceRaw),
           discount_percent: Math.min(100, Math.max(0, Number(row.querySelector('[data-discount]').value) || 0)),
         };
       })
-      .filter((l) => l && l.product_name && l.qty > 0);
+      .filter((l) => {
+        if (!l) return false;
+        if (l.line_type === 'section') return l.product_name;
+        if (l.line_type === 'note') return l.description;
+        return l.product_name && l.qty > 0;
+      });
+  }
+
+  // Quita las filas de producto vacías (la del arranque) antes de agregar
+  // líneas de una plantilla.
+  function dropEmptyRows(list) {
+    list.querySelectorAll('[data-type="product"]').forEach((row) => {
+      const search = row.querySelector('[data-prod-search]');
+      if (search && !search.value.trim()) row.remove();
+    });
+  }
+
+  // ---- plantillas de cotización (como en Odoo) ---------------------------------
+  function presetBar() {
+    const canSave = ctx.user?.role !== 'asesor';
+    if (!presets.length && !canSave) return '';
+    return `
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        ${
+          presets.length
+            ? `<select id="cz-preset" class="p-2 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm max-w-xs">
+                 <option value="">Aplicar plantilla…</option>
+                 ${presets.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+               </select>`
+            : ''
+        }
+        ${canSave ? '<button type="button" id="cz-save-preset" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">library_add</span>Guardar como plantilla</button>' : ''}
+      </div>`;
+  }
+
+  function applyPreset(list, preset) {
+    dropEmptyRows(list);
+    for (const l of preset.lines) {
+      // Las secciones de categoría se arman solas con sus productos.
+      if (l.line_type === 'section' && l.category_id) continue;
+      appendLineRow(list, l, true, { place: true });
+    }
+    pruneSections(list);
+    const validity = root.querySelector('#cz-validity');
+    if (preset.validity_days && validity) {
+      validity.value = preset.validity_days;
+      validity.dispatchEvent(new Event('input'));
+    }
+    const note = root.querySelector('#cz-note');
+    if (preset.note && note && !note.value.trim()) note.value = preset.note;
+    renderTotals();
+    ctx.toast(`Plantilla «${preset.name}» aplicada`, 'success');
+  }
+
+  function wirePresetBar(list) {
+    const select = root.querySelector('#cz-preset');
+    select?.addEventListener('change', () => {
+      const preset = presets.find((p) => p.id === Number(select.value));
+      select.value = '';
+      if (preset) applyPreset(list, preset);
+    });
+    root.querySelector('#cz-save-preset')?.addEventListener('click', () => {
+      const lines = readLines(list);
+      if (!lines.some((l) => l.line_type === 'product')) {
+        ctx.toast('Agrega al menos un producto antes de guardar la plantilla', 'error');
+        return;
+      }
+      openModal({
+        title: 'Guardar como plantilla',
+        render(body, { close }) {
+          const cls = 'w-full p-2 border border-outline-variant rounded-md outline-none focus:border-outline text-body-sm';
+          body.innerHTML = `
+            <div class="flex flex-col gap-4">
+              <p class="text-[12px] text-on-surface-variant">Se guardan las ${lines.length} líneas de esta cotización (productos, secciones y notas), sin el cliente. Al aplicarla, los productos del catálogo llegan con su precio de ese día.</p>
+              <div><label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Nombre *</label><input id="sp-name" class="${cls}" placeholder="Ej. Forro completo + sillín" /></div>
+              <div><label class="block text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1">Descripción</label><input id="sp-desc" class="${cls}" placeholder="Opcional" /></div>
+              <div class="flex justify-end gap-2"><button type="button" id="sp-save" class="btn btn-primary"><span class="material-symbols-outlined">save</span>Guardar plantilla</button></div>
+            </div>`;
+          body.querySelector('#sp-save').addEventListener('click', async (e) => {
+            const name = body.querySelector('#sp-name').value.trim();
+            if (!name) {
+              ctx.toast('Ponle un nombre a la plantilla', 'error');
+              return;
+            }
+            e.currentTarget.disabled = true;
+            try {
+              const saved = await ctx.api.post('/api/quote-presets', {
+                name,
+                description: body.querySelector('#sp-desc').value,
+                lines,
+                validity_days: Number(root.querySelector('#cz-validity')?.value) || null,
+              });
+              presets = [...presets, saved].sort((a, b) => a.name.localeCompare(b.name));
+              ctx.toast(`Plantilla «${saved.name}» guardada`, 'success');
+              close();
+              const slot = root.querySelector('#cz-preset-slot');
+              if (slot) {
+                slot.innerHTML = presetBar();
+                wirePresetBar(list);
+              }
+            } catch (err) {
+              ctx.toast(err.message, 'error');
+              e.currentTarget.disabled = false;
+            }
+          });
+        },
+      });
+    });
   }
 
   // ---- plantillas de cotización (data/quoteTemplates.js) ---------------------
@@ -585,7 +944,7 @@ export async function mount(container, ctx) {
     if (!templateConfig) return '';
     return `
       <div class="mb-3">
-        <p class="text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1.5">Plantillas según lo que se va a fabricar</p>
+        <p class="text-[10px] font-label-bold uppercase tracking-wide text-on-surface-variant mb-1.5">Calcular precio según lo que se va a fabricar</p>
         <div class="flex flex-wrap gap-2">
           ${TEMPLATES.map(
             (t) => `<button type="button" data-template="${t.key}" title="${escapeHtml(t.desc)}" class="btn btn-secondary text-[12px]"><span class="material-symbols-outlined">${t.icon}</span>${escapeHtml(t.label)}</button>`
@@ -599,12 +958,12 @@ export async function mount(container, ctx) {
   // Agrega las líneas que devolvió una plantilla. Quita la fila vacía del
   // arranque y, si aún no hay servicio elegido, toma el de la plantilla y
   // llena sus campos vacíos con lo calculado (tipo, medidas…).
+  // Las líneas de una plantilla de cálculo (carpas, forros…) entran en la
+  // sección de la categoría de su servicio, como un producto del catálogo.
   function addTemplateLines(list, lines, { service_slug, hints }) {
-    list.querySelectorAll('[data-line]').forEach((row) => {
-      const search = row.querySelector('[data-prod-search]');
-      if (search && !search.value.trim()) row.remove();
-    });
-    lines.forEach((l) => appendLineRow(list, l, true));
+    dropEmptyRows(list);
+    const cat = service_slug ? categories.find((c) => c.service_slug === service_slug) : null;
+    lines.forEach((l) => appendLineRow(list, { ...l, category_id: l.category_id || cat?.id || null }, true, { place: true }));
 
     if (service_slug && !selectedServiceSlug) {
       selectedServiceSlug = service_slug;
@@ -689,7 +1048,12 @@ export async function mount(container, ctx) {
     const ta = root.querySelector('#cz-terms');
     if (!ta || termsCustom) return;
     try {
-      const r = await ctx.api.get(`/api/quotations/default-terms?service=${encodeURIComponent(selectedServiceSlug || '')}`);
+      // Con categorías en la cotización, la garantía y la entrega salen en
+      // su propio bloque (uno por categoría) y no en las condiciones.
+      const byCategory = presentCategories(linesEl()).some((c) => c.warranty || c.lead_time);
+      const r = await ctx.api.get(
+        `/api/quotations/default-terms?service=${encodeURIComponent(selectedServiceSlug || '')}${byCategory ? '&by_category=1' : ''}`
+      );
       if (!termsCustom && ta.isConnected) {
         ta.value = r.text;
         autoGrow(ta);
@@ -827,22 +1191,34 @@ export async function mount(container, ctx) {
         ? field('cz-advisor-ro', 'Asesor', lead.advisor_name || 'Sin asignar', { readonly: true })
         : `<div class="md:col-span-3 flex items-center gap-1.5 text-[11px] text-tertiary"><span class="material-symbols-outlined text-[14px]">info</span>Cliente nuevo: solo coordinador/admin puede registrarlo. Busca uno que ya exista.</div>`;
 
+    // Arriba: el buscador + "Cliente nuevo" (sin cliente) o el resumen del
+    // cliente elegido + "Editar datos". El formulario va plegado debajo.
+    const top = !lead
+      ? `<div class="flex items-start gap-2 flex-wrap">
+           <div class="relative flex-1 min-w-[220px] max-w-lg">
+             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant pointer-events-none">search</span>
+             <input id="cz-search" type="text" autocomplete="off" placeholder="Buscar por nombre, teléfono o documento…" class="w-full pl-10 pr-3 py-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
+             <div id="cz-results" class="hidden absolute z-20 mt-1 w-full bg-surface border border-outline-variant rounded-md shadow-lg max-h-72 overflow-y-auto"></div>
+           </div>
+           <button type="button" id="cz-toggle-client" aria-expanded="${clientFormOpen}" class="btn btn-secondary py-2.5"><span class="material-symbols-outlined">${clientFormOpen ? 'expand_less' : 'person_add'}</span><span data-label>${clientFormOpen ? 'Ocultar formulario' : 'Cliente nuevo'}</span></button>
+         </div>`
+      : `<div class="flex items-center gap-3 p-3 rounded-lg bg-surface-container-low flex-wrap">
+           <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[12px] font-bold shrink-0">${escapeHtml(initials(lead.client_name))}</span>
+           <div class="min-w-0 flex-1">
+             <p class="text-body-sm font-bold text-on-surface truncate">${escapeHtml(lead.client_name)}</p>
+             <p class="text-[11px] text-on-surface-variant truncate">${[lead.phone, lead.document, lead.city, lead.advisor_name ? `Asesor: ${lead.advisor_name}` : ''].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+           </div>
+           <button type="button" id="cz-toggle-client" aria-expanded="${clientFormOpen}" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">${clientFormOpen ? 'expand_less' : 'edit'}</span><span data-label>${clientFormOpen ? 'Ocultar datos' : 'Editar datos'}</span></button>
+         </div>`;
+
     return stepCard(
       1,
       'person',
       'Cliente',
       'Busque un cliente existente o registre uno nuevo.',
       `
-        ${
-          !lead
-            ? `<div class="relative max-w-lg mb-3">
-                 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant pointer-events-none">search</span>
-                 <input id="cz-search" type="text" autocomplete="off" placeholder="Buscar por nombre, teléfono o documento…" class="w-full pl-10 pr-3 py-2.5 border border-outline-variant rounded-md outline-none focus:border-outline focus:ring-2 focus:ring-outline/20" />
-                 <div id="cz-results" class="hidden absolute z-20 mt-1 w-full bg-surface border border-outline-variant rounded-md shadow-lg max-h-72 overflow-y-auto"></div>
-               </div>`
-            : ''
-        }
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        ${top}
+        <div id="cz-client-form" class="${clientFormOpen ? '' : 'hidden'} mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           ${field('cz-name', 'Nombre', lead?.client_name, { required: true })}
           ${field('cz-phone', 'Teléfono', lead?.phone, { required: true, type: 'tel' })}
           ${field('cz-document', 'NIT / Documento', lead?.document)}
@@ -856,8 +1232,26 @@ export async function mount(container, ctx) {
     );
   }
 
+  // Despliega o pliega el formulario del cliente sin repintar la pantalla
+  // (no se pierde lo que ya se escribió en las líneas).
+  function setClientFormOpen(open) {
+    clientFormOpen = open;
+    const form = root.querySelector('#cz-client-form');
+    const btn = root.querySelector('#cz-toggle-client');
+    form?.classList.toggle('hidden', !open);
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(open));
+      btn.querySelector('.material-symbols-outlined').textContent = open ? 'expand_less' : lead ? 'edit' : 'person_add';
+      btn.querySelector('[data-label]').textContent = open ? (lead ? 'Ocultar datos' : 'Ocultar formulario') : lead ? 'Editar datos' : 'Cliente nuevo';
+    }
+  }
+
   function wireClientSection() {
     root.querySelector('#cz-change')?.addEventListener('click', resetAll);
+    root.querySelector('#cz-toggle-client')?.addEventListener('click', () => {
+      setClientFormOpen(!clientFormOpen);
+      if (clientFormOpen) root.querySelector('#cz-name')?.focus();
+    });
     const search = root.querySelector('#cz-search');
     const results = root.querySelector('#cz-results');
     if (!search) return;
@@ -877,7 +1271,8 @@ export async function mount(container, ctx) {
           return;
         }
         if (!list.length) {
-          results.innerHTML = '<p class="px-3 py-2 text-[11px] text-on-surface-variant">Sin resultados — llena los datos de abajo para registrarlo</p>';
+          results.innerHTML = `<p class="px-3 pt-2 text-[11px] text-on-surface-variant">Sin resultados</p>
+            <button type="button" data-new-from="${escapeHtml(term)}" class="w-full text-left px-3 py-2 hover:bg-surface-container-low text-body-sm font-bold flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">person_add</span>Registrar «${escapeHtml(term)}» como cliente nuevo</button>`;
           results.classList.remove('hidden');
           return;
         }
@@ -897,9 +1292,23 @@ export async function mount(container, ctx) {
       }, 250);
     });
     results.addEventListener('click', async (e) => {
+      // Sin resultados: abre el formulario con lo buscado ya puesto (en
+      // teléfono si son números, si no en nombre).
+      const fresh = e.target.closest('button[data-new-from]');
+      if (fresh) {
+        results.classList.add('hidden');
+        const term = fresh.dataset.newFrom;
+        const isPhone = /^[\d\s+()-]{7,}$/.test(term);
+        const target = root.querySelector(isPhone ? '#cz-phone' : '#cz-name');
+        if (target && !target.value.trim()) target.value = term;
+        setClientFormOpen(true);
+        root.querySelector(isPhone ? '#cz-name' : '#cz-phone')?.focus();
+        return;
+      }
       const btn = e.target.closest('button[data-id]');
       if (!btn) return;
       results.classList.add('hidden');
+      clientFormOpen = false;
       try {
         lead = await ctx.api.get(`/api/leads/${btn.dataset.id}`);
       } catch (err) {
@@ -1040,7 +1449,7 @@ export async function mount(container, ctx) {
             3,
             'inventory_2',
             'Detalle de la cotización',
-            'Agregue los conceptos y precios.',
+            'Busque productos del catálogo: cada uno entra en la sección de su categoría, con su encabezado y su garantía.',
             `
               ${
                 isEditable()
@@ -1053,9 +1462,19 @@ export async function mount(container, ctx) {
                      </div>`
                   : ''
               }
+              ${isEditable() ? `<div id="cz-preset-slot">${presetBar()}</div>` : ''}
               ${isEditable() ? templateBar() : ''}
               <div id="cz-lines"></div>
-              ${isEditable() ? `<button type="button" id="cz-add-line" class="btn btn-ghost mt-1 text-[12px]"><span class="material-symbols-outlined">add</span>Agregar concepto</button>` : ''}
+              ${
+                isEditable()
+                  ? `<div class="flex items-center gap-1 mt-1 flex-wrap">
+                       <button type="button" id="cz-add-line" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">add</span>Agregar producto</button>
+                       <button type="button" id="cz-add-section" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">view_agenda</span>Agregar sección</button>
+                       <button type="button" id="cz-add-note" class="btn btn-ghost text-[12px]"><span class="material-symbols-outlined">sticky_note_2</span>Agregar nota</button>
+                     </div>`
+                  : ''
+              }
+              <div id="cz-policies"></div>
             `
           )}
           ${
@@ -1112,8 +1531,15 @@ export async function mount(container, ctx) {
     } else {
       appendLineRow(list, null, true);
     }
-    root.querySelector('#cz-add-line')?.addEventListener('click', () => appendLineRow(list, null, true));
+    root.querySelector('#cz-add-line')?.addEventListener('click', () => appendLineRow(list, null, true).querySelector('[data-prod-search]')?.focus());
+    root
+      .querySelector('#cz-add-section')
+      ?.addEventListener('click', () => appendLineRow(list, { line_type: 'section', product_name: '' }, true).querySelector('[data-sec-title]')?.focus());
+    root
+      .querySelector('#cz-add-note')
+      ?.addEventListener('click', () => appendLineRow(list, { line_type: 'note', description: '' }, true).querySelector('[data-note]')?.focus());
     wireTemplateBar(list);
+    wirePresetBar(list);
     wireImages();
     wireTerms();
 
@@ -1245,17 +1671,28 @@ export async function mount(container, ctx) {
     const name = root.querySelector('#cz-name').value.trim();
     const phone = root.querySelector('#cz-phone').value.trim();
     if (!name || !phone) {
-      ctx.toast('Nombre y teléfono son obligatorios', 'error');
+      setClientFormOpen(true);
+      ctx.toast(lead ? 'Nombre y teléfono son obligatorios' : 'Busca el cliente o regístralo con «Cliente nuevo»', 'error');
+      root.querySelector(name ? '#cz-phone' : '#cz-name')?.focus();
       return;
     }
     const list = root.querySelector('#cz-lines');
     const lines = readLines(list);
-    if (!lines.length) {
+    if (!lines.some((l) => l.line_type === 'product')) {
       ctx.toast('Agrega al menos un producto con cantidad', 'error');
       return;
     }
 
-    const service_slug = root.querySelector('#cz-service')?.value || null;
+    // Sin servicio elegido, se toma el de la primera categoría cotizada.
+    let service_slug = root.querySelector('#cz-service')?.value || null;
+    if (!service_slug) {
+      service_slug = presentCategories(list).find((c) => c.service_slug && findService(c.service_slug))?.service_slug || null;
+      if (service_slug) {
+        selectedServiceSlug = service_slug;
+        const select = root.querySelector('#cz-service');
+        if (select) select.value = service_slug;
+      }
+    }
     if (!service_slug) {
       ctx.toast('Selecciona un servicio', 'error');
       return;
@@ -1312,6 +1749,7 @@ export async function mount(container, ctx) {
       }
       await uploadPending(r.quotation.id);
       await refreshHistory(r.quotation.id);
+      clientFormOpen = false; // ya guardado: el cliente queda como resumen
       render();
     } catch (err) {
       ctx.toast(err.message, 'error');

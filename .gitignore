@@ -3,6 +3,7 @@ node_modules/
 
 # Base de datos local y respaldos (nunca al repo)
 server/data/
+server/data-demo/
 server/backups/
 server/logs/
 *.db

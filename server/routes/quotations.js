@@ -139,9 +139,12 @@ router.get('/', async (req, res) => {
 
 // Condiciones de siempre para el servicio elegido: la pantalla Cotizar las
 // muestra en el cuadro de condiciones para que el asesor las ajuste.
+// ?by_category=1: la cotización ya trae secciones de categoría, así que la
+// garantía y el tiempo de entrega salen en su propio bloque (uno por
+// categoría) y no se repiten aquí.
 router.get('/default-terms', async (req, res) => {
   const cfg = await quoteSettings();
-  const { title, lines } = defaultTerms(cfg, req.query.service || null);
+  const { title, lines } = defaultTerms(cfg, req.query.service || null, { byCategory: req.query.by_category === '1' });
   res.json({ title, text: lines.join('\n') });
 });
 
@@ -160,8 +163,8 @@ router.put('/:id', async (req, res) => {
     return res.status(409).json({ error: 'Esta cotización ya es venta o está cancelada; no se puede cambiar' });
   }
   const { lines, service_slug, service_fields, note, validity_days, terms, number } = req.body || {};
-  const cleanLines = Array.isArray(lines) ? lines.filter((l) => l && l.product_name && Number(l.qty) > 0) : [];
-  if (!cleanLines.length) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
+  const cleanLines = nativeQuotes.cleanLines(lines);
+  if (!cleanLines) return res.status(400).json({ error: 'Agrega al menos un producto a la cotización' });
   // Número propio (vacío = vuelve al consecutivo COT-0001).
   if (number !== undefined && String(number).trim() !== quotation.number) {
     const r = await nativeQuotes.setNumber(quotation.id, number);
@@ -384,12 +387,12 @@ function splitTerms(text) {
 // (fabricación) llevan sus propias políticas, editables en Cotizaciones ›
 // Plantillas y tarifas; el resto usa las de Ajustes. Tiempo de entrega y
 // garantía salen de una sola tabla por servicio, igual a la del sitio.
-function defaultTerms(cfg, slug) {
+function defaultTerms(cfg, slug, { byCategory = false } = {}) {
   const fabrication = quoteTemplates.isFabrication(slug) && (cfg.termsFabricacion || []).length;
   const terms = fabrication ? cfg.termsFabricacion.map((s) => String(s).trim()).filter(Boolean) : splitTerms(cfg.terms);
   const lines = (terms.length ? terms : DEFAULT_TERMS.slice()).filter((t) => !/^(garant[ií]a|tiempo estimado)/i.test(t));
-  const leadTime = cfg.tiempos && slug ? cfg.tiempos[slug] : null;
-  const warranty = cfg.garantias && slug ? cfg.garantias[slug] : null;
+  const leadTime = !byCategory && cfg.tiempos && slug ? cfg.tiempos[slug] : null;
+  const warranty = !byCategory && cfg.garantias && slug ? cfg.garantias[slug] : null;
   const generated = [];
   if (leadTime) generated.push(`Tiempo estimado de entrega: ${leadTime} (puede variar según la carga del taller y la complejidad del trabajo).`);
   if (warranty) generated.push(`Garantía: ${warranty}. ${cfg.garantiaReclamo || ''}`.trim());
@@ -465,16 +468,36 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg, images =
     { key: 'price', label: 'Valor unitario', x: PAGE.L + 346, w: 82, align: 'right' },
     { key: 'total', label: 'Valor total', x: PAGE.L + 432, w: 83, align: 'right' },
   ];
-  const rows = quotation.lines.map((l, i) => ({
-    item: String(i + 1),
-    desc: { text: l.product_name, sub: l.description || null },
-    qty: String(l.qty),
-    price:
-      l.discount_percent > 0
-        ? { text: money(l.price_unit), sub: `Descuento ${l.discount_percent} %`, subColor: C.red }
-        : money(l.price_unit),
-    total: money(l.subtotal),
-  }));
+  // Secciones (encabezado de categoría, con el subtotal de sus productos) y
+  // notas van a todo lo ancho; el N.º de ítem cuenta solo los productos.
+  const sectionTotals = new Map();
+  let openSection = null;
+  for (const l of quotation.lines) {
+    const type = l.line_type || 'product';
+    if (type === 'section') {
+      openSection = l.id;
+      sectionTotals.set(l.id, 0);
+    } else if (type === 'product' && openSection) {
+      sectionTotals.set(openSection, sectionTotals.get(openSection) + (Number(l.subtotal) || 0));
+    }
+  }
+  let item = 0;
+  const rows = quotation.lines.map((l) => {
+    const type = l.line_type || 'product';
+    if (type === 'section') return { kind: 'section', title: l.product_name, sub: l.description || null, total: money(sectionTotals.get(l.id)) };
+    if (type === 'note') return { kind: 'note', text: l.description || '' };
+    item++;
+    return {
+      item: String(item),
+      desc: { text: l.product_name, sub: l.description || null },
+      qty: String(l.qty),
+      price:
+        l.discount_percent > 0
+          ? { text: money(l.price_unit), sub: `Descuento ${l.discount_percent} %`, subColor: C.red }
+          : money(l.price_unit),
+      total: money(l.subtotal),
+    };
+  });
   let y = brand.drawTable(doc, colsBottom + 6, cols, rows, { minRows: 3 });
 
   // ---- totales (der.) + datos de pago (izq., en el hueco de la plantilla) ---
@@ -539,9 +562,25 @@ function drawQuotationPdf(doc, { quotation, lead, client, advisor, cfg, images =
     }
   }
 
+  // ---- garantía y tiempo de entrega, uno por categoría ----------------------
+  const withPolicy = (quotation.categories || []).filter((c) => c.warranty || c.lead_time);
+  if (withPolicy.length) {
+    const policyLines = withPolicy.map((c) => {
+      const parts = [];
+      if (c.warranty) parts.push(`garantía de ${c.warranty}`);
+      if (c.lead_time) parts.push(`entrega estimada en ${c.lead_time}`);
+      const text = parts.join('; ');
+      return `${c.name}: ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+    });
+    if (cfg.garantiaReclamo && withPolicy.some((c) => c.warranty)) policyLines.push(cfg.garantiaReclamo);
+    y = brand.ensureSpace(doc, y, 50);
+    y = brand.sectionHeading(doc, withPolicy.some((c) => c.warranty) ? 'Garantía y tiempo de entrega' : 'Tiempo de entrega', PAGE.L, y);
+    y = brand.bulletList(doc, PAGE.L, y, PAGE.W, policyLines) + 8;
+  }
+
   // ---- condiciones comerciales --------------------------------------------
   // Las escritas a mano en la cotización mandan; si no hay, las de siempre.
-  const base = defaultTerms(cfg, quotation.service_slug);
+  const base = defaultTerms(cfg, quotation.service_slug, { byCategory: withPolicy.length > 0 });
   const termLines = quotation.terms ? splitTerms(quotation.terms) : base.lines;
   if (quotation.validity_date) termLines.push(`Esta cotización es válida hasta el ${fmtDateDMY(quotation.validity_date)}.`);
   if (termLines.length) {

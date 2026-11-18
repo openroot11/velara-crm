@@ -8,15 +8,10 @@
 // Para agregar una plantilla nueva: sumarla a TEMPLATES y darle un
 // formulario en components/quoteTemplateModal.js.
 
+// Forros para carros ya no lleva calculadora: se cotizan con los productos
+// del catálogo (Cotizaciones › Catálogo, con su precio fijo), y la
+// calculadora vieja ofrecía materiales sintéticos que estos forros no usan.
 export const TEMPLATES = [
-  {
-    key: 'forro-carro',
-    label: 'Forros para carro',
-    icon: 'directions_car',
-    service_slug: 'forros-para-carros',
-    auto: 'forrosCarros',
-    desc: 'Forros a la medida del vehículo: completo, delanteros, banca trasera o juego completo.',
-  },
   {
     key: 'tapizado-auto',
     label: 'Tapizado automotriz',

@@ -30,7 +30,14 @@ function round2(n) {
 
 // El subtotal de una línea ya descuenta su discount_percent (0-100) -- igual
 // que Salesforce/Odoo, el descuento es por línea, no global.
+const LINE_TYPES = ['product', 'section', 'note'];
+function lineType(l) {
+  return LINE_TYPES.includes(l && l.line_type) ? l.line_type : 'product';
+}
+
+// Secciones y notas no suman: solo las líneas de producto llevan precio.
 function lineSubtotal(l) {
+  if (lineType(l) !== 'product') return 0;
   const qty = Number(l.qty) || 0;
   const price = Number(l.price_unit) || 0;
   const discount = Math.min(100, Math.max(0, Number(l.discount_percent) || 0));
@@ -62,7 +69,35 @@ async function readQuotation(id) {
   const images = await db
     .prepare('SELECT id, caption, original_name, mime, size, position FROM quotation_images WHERE quotation_id = ? ORDER BY position ASC, id ASC')
     .all(id);
-  return { ...q, service_fields, lines, images, is_confirmed: q.state === 'sale' };
+  const categories = await categoriesOf(lines);
+  return { ...q, service_fields, lines, images, categories, is_confirmed: q.state === 'sale' };
+}
+
+// Categorías que aparecen en la cotización (por sus secciones o productos),
+// en el orden en que salen: de aquí salen la garantía y el tiempo de
+// entrega de cada una para el PDF.
+async function categoriesOf(lines) {
+  const ids = [];
+  for (const l of lines) if (l.category_id && !ids.includes(l.category_id)) ids.push(l.category_id);
+  if (!ids.length) return [];
+  const rows = await db.prepare(`SELECT * FROM product_categories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+// Limpia lo que llega del navegador: productos con nombre y cantidad,
+// secciones con título y notas con texto. Devuelve null si no queda ningún
+// producto (una cotización necesita al menos uno).
+function cleanLines(lines) {
+  if (!Array.isArray(lines)) return null;
+  const out = lines.filter((l) => {
+    if (!l) return false;
+    const type = lineType(l);
+    if (type === 'product') return String(l.product_name || '').trim() && Number(l.qty) > 0;
+    if (type === 'section') return String(l.product_name || '').trim();
+    return String(l.description || '').trim();
+  });
+  return out.some((l) => lineType(l) === 'product') ? out : null;
 }
 
 // Reescribe TODAS las lineas de una cotizacion (se usa tanto al crearla como
@@ -70,17 +105,21 @@ async function readQuotation(id) {
 async function writeLines(quotationId, lines) {
   await db.prepare('DELETE FROM quotation_lines WHERE quotation_id = ?').run(quotationId);
   const insert = db.prepare(
-    'INSERT INTO quotation_lines (quotation_id, product_id, product_name, description, qty, price_unit, discount_percent, subtotal, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO quotation_lines (quotation_id, line_type, category_id, product_id, product_name, description, qty, price_unit, discount_percent, subtotal, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   let position = 0;
   for (const l of lines) {
-    const qty = Number(l.qty) || 0;
-    const price_unit = Number(l.price_unit) || 0;
-    const discount_percent = Math.min(100, Math.max(0, Number(l.discount_percent) || 0));
+    const type = lineType(l);
+    const isProduct = type === 'product';
+    const qty = isProduct ? Number(l.qty) || 0 : 0;
+    const price_unit = isProduct ? Number(l.price_unit) || 0 : 0;
+    const discount_percent = isProduct ? Math.min(100, Math.max(0, Number(l.discount_percent) || 0)) : 0;
     await insert.run(
       quotationId,
-      l.product_id || null,
-      l.product_name,
+      type,
+      Number(l.category_id) || null,
+      isProduct ? Number(l.product_id) || null : null,
+      type === 'note' ? '' : String(l.product_name || '').trim(),
       (l.description && String(l.description).trim()) || null,
       qty,
       price_unit,
@@ -122,6 +161,8 @@ async function duplicateQuotation(sourceId, createdBy) {
   await writeLines(
     newId,
     source.lines.map((l) => ({
+      line_type: l.line_type,
+      category_id: l.category_id,
       product_id: l.product_id,
       product_name: l.product_name,
       description: l.description,
@@ -173,4 +214,4 @@ async function setNumber(quotationId, raw) {
   return { number: wanted };
 }
 
-module.exports = { UPLOAD_ROOT, ivaRate, round2, computeTotals, readQuotation, writeLines, duplicateQuotation, canAccessQuotation, setNumber };
+module.exports = { UPLOAD_ROOT, ivaRate, round2, computeTotals, lineType, cleanLines, readQuotation, writeLines, duplicateQuotation, canAccessQuotation, setNumber };

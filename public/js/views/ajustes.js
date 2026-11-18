@@ -1,6 +1,7 @@
 import { confirmFactoryReset } from '../components/leadActions.js';
 import { openModal } from '../components/modal.js';
 import { escapeHtml } from '../utils.js';
+import { getNavStyle, setNavStyle } from '../navStyle.js';
 
 const ROLES = [
   { value: 'admin', label: 'Dueño / Admin' },
@@ -40,6 +41,31 @@ export async function mount(container, ctx) {
       </header>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+        <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter shadow-sm col-span-1 md:col-span-2">
+          <div class="flex items-center gap-3 mb-4 border-b border-outline-variant pb-3">
+            <span class="material-symbols-outlined text-on-surface text-2xl">view_quilt</span>
+            <h3 class="text-headline-md font-headline-md text-on-surface">Apariencia</h3>
+          </div>
+          <p class="text-body-sm font-body-sm text-on-surface-variant mb-3">Cómo se ve el menú dentro de cada aplicación. Se guarda en este navegador.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Estilo del menú">
+            ${[
+              ['top', 'Menú arriba', 'Como Odoo: arriba el botón de cuadrícula para volver al Inicio, el nombre de la aplicación y sus pantallas.', 'Predeterminado'],
+              ['side', 'Menú lateral', 'El menú de la izquierda con todas las pantallas juntas, por grupos.', ''],
+            ]
+              .map(
+                ([value, title, desc, tag]) => `
+              <label class="flex items-start gap-3 p-4 rounded-lg border border-outline-variant bg-surface-container cursor-pointer has-[:checked]:border-on-surface has-[:checked]:bg-surface-container-high">
+                <input type="radio" name="nav-style" value="${value}" class="mt-1 accent-current" ${getNavStyle() === value ? 'checked' : ''} />
+                <span class="min-w-0">
+                  <span class="flex items-center gap-2 text-body-md font-body-md font-semibold text-on-surface">${title}${tag ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface-container-highest text-on-surface-variant">${tag}</span>` : ''}</span>
+                  <span class="block text-body-sm font-body-sm text-on-surface-variant mt-0.5">${desc}</span>
+                </span>
+              </label>`
+              )
+              .join('')}
+          </div>
+        </section>
+
         <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter shadow-sm col-span-1">
           <div class="flex items-center gap-3 mb-6 border-b border-outline-variant pb-3">
             <span class="material-symbols-outlined text-on-surface text-2xl">download</span>
@@ -222,6 +248,14 @@ export async function mount(container, ctx) {
       </div>
     </div>
   `;
+
+  container.querySelectorAll('input[name="nav-style"]').forEach((input) =>
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      setNavStyle(input.value);
+      ctx.toast(input.value === 'top' ? 'Menú arriba, como Odoo' : 'Menú lateral', 'success');
+    })
+  );
 
   container.querySelector('#export-xlsx').addEventListener('click', () => download('/api/export/xlsx'));
   container.querySelector('#export-json').addEventListener('click', () => download('/api/export/json'));

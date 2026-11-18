@@ -231,7 +231,47 @@ function drawTable(doc, y, cols, rows, { minRows = 0 } = {}) {
   header();
   const all = rows.slice();
   while (all.length < minRows) all.push(null);
+  // Fila de sección: fondo blanco roto, título en negrita, el encabezado de
+  // la categoría debajo y el subtotal de la sección en la última columna.
+  // Fila de nota: texto a todo lo ancho, en gris.
+  const last = cols[cols.length - 1];
+  const fullX = cols[0].x;
+  const fullW = last.x - fullX - 8;
+  function drawWide(row) {
+    const isSection = row.kind === 'section';
+    let h;
+    if (isSection) {
+      h = doc.font(F.bold).fontSize(9).heightOfString(String(row.title || ''), { width: fullW });
+      if (row.sub) h += doc.font(F.regular).fontSize(7.5).heightOfString(String(row.sub), { width: fullW }) + 2;
+    } else {
+      h = doc.font(F.regular).fontSize(8).heightOfString(String(row.text || ''), { width: last.x + last.w - fullX });
+    }
+    const rowH = Math.max(18.5, h + 11);
+    if (y + rowH > PAGE.BOTTOM) {
+      doc.addPage();
+      y = 50;
+      header();
+    }
+    if (isSection) {
+      doc.rect(PAGE.L, y, PAGE.W, rowH).fill(C.paper);
+      doc.rect(PAGE.L, y, 2.5, rowH).fill(C.red);
+      doc.font(F.bold).fontSize(9).fillColor(C.ink);
+      const th = doc.heightOfString(String(row.title || ''), { width: fullW });
+      doc.text(String(row.title || ''), fullX, y + 6, { width: fullW });
+      if (row.sub) doc.font(F.regular).fontSize(7.5).fillColor(C.smoke).text(String(row.sub), fullX, y + 6 + th + 2, { width: fullW });
+      if (row.total) doc.font(F.bold).fontSize(8.5).fillColor(C.ink).text(String(row.total), last.x, y + 6, { width: last.w, align: 'right' });
+    } else {
+      doc.font(F.regular).fontSize(8).fillColor(C.smoke).text(String(row.text || ''), fullX, y + 5.5, { width: last.x + last.w - fullX });
+    }
+    y += rowH;
+    doc.moveTo(PAGE.L, y).lineTo(PAGE.R, y).lineWidth(0.5).strokeColor(C.line).stroke();
+  }
+
   all.forEach((row, i) => {
+    if (row && row.kind) {
+      drawWide(row);
+      return;
+    }
     let rowH = 18.5;
     if (row) {
       for (const c of cols) {

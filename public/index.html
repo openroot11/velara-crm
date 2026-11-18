@@ -499,12 +499,17 @@
           <span class="material-symbols-outlined">dock_to_right</span>
         </button>
         <h2 id="page-title" class="text-[13.5px] font-medium text-on-surface truncate min-w-0">Velara CRM</h2>
+        <!-- Menú arriba de la aplicación, como Odoo (app.js lo llena y lo
+             muestra cuando el estilo de menú es "arriba"). -->
+        <div id="appbar" class="hidden items-center gap-1 min-w-0"></div>
       </div>
       <div class="flex items-center gap-1 shrink-0">
         <button id="theme-toggle-btn" type="button" aria-label="Cambiar tema claro/oscuro" class="btn btn-icon" title="Cambiar a tema oscuro/claro">
           <span id="theme-toggle-icon" class="material-symbols-outlined">dark_mode</span>
         </button>
         <span id="conn-dot" class="w-1.5 h-1.5 rounded-full bg-outline-variant ml-1" title="Conectando…"></span>
+        <!-- Usuario y salir: con el menú arriba no está el pie del menú lateral. -->
+        <div id="topbar-user" class="hidden items-center gap-1 ml-2"></div>
       </div>
     </header>
     <main id="view-root" class="flex-1 min-w-0 overflow-y-auto p-margin-mobile sm:p-margin-desktop"></main>

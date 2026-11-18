@@ -3,10 +3,11 @@ import { openModal, confirmModal } from '../components/modal.js';
 import { openEditLeadModal, deleteLead } from '../components/leadActions.js';
 import { SERVICES as VELARA_SERVICES } from '../data/velaraServices.js';
 
-// Embudo de ventas: cada cliente interesado avanza Nuevo -> Contactado ->
-// Cotizado -> Ganado (o Perdido). Arriba, lo que hay que hacer hoy. Reemplaza
-// las pantallas de Leads, Seguimiento, Cotizaciones y Ventas cerradas, que
-// estaban pensadas para un equipo de asesores. Ver GET /api/leads/pipeline.
+// CRM › Flujo (como el flujo del CRM de Odoo): cada cliente interesado
+// avanza Nuevo -> Contactado -> Cotizado -> Ganado (o Perdido), en columnas
+// con tarjetas que se arrastran. Arriba: Nuevo, el buscador con chips
+// (buscar en todo o por campo, filtros y vendedor) y tarjetas/lista. Las
+// cifras del mes viven en CRM › Resumen. Ver GET /api/leads/pipeline.
 
 const STAGES = [
   { key: 'asignado', label: 'Nuevos', icon: 'fiber_new' },
@@ -72,10 +73,110 @@ function bindMoneyInput(el) {
   paint();
 }
 
+// Búsqueda como Odoo: lo que se escribe se puede buscar en todo o en un
+// campo (Cliente, N.º de cotización…); cada búsqueda queda como un chip.
+const SEARCH_FIELDS = [
+  ['all', 'Todo'],
+  ['client', 'Cliente'],
+  ['quote', 'N.º de cotización'],
+  ['phone', 'Teléfono o documento'],
+  ['product', 'Servicio'],
+  ['city', 'Ciudad'],
+  ['advisor', 'Vendedor'],
+];
+function fieldValues(l, field) {
+  const by = {
+    client: [l.client_name, l.email],
+    quote: [l.quotation?.number],
+    phone: [l.phone, l.document],
+    product: [l.product],
+    city: [l.city],
+    advisor: [l.advisor_name],
+  };
+  if (field !== 'all') return by[field] || [];
+  return [...Object.values(by).flat(), l.notes, l.source, l.channel_detail, l.lost_reason, l.work_order?.number, l.address];
+}
+function matchesText(l, field, value) {
+  const term = String(value).toLowerCase();
+  const digitsTerm = term.replace(/\D/g, '');
+  return fieldValues(l, field).some((v) => {
+    if (v == null) return false;
+    const s = String(v).toLowerCase();
+    if (s.includes(term)) return true;
+    // Teléfonos y números sin espacios ni guiones: "300 366" encuentra "300366…".
+    return digitsTerm.length >= 3 && s.replace(/\D/g, '').includes(digitsTerm);
+  });
+}
+
+// Lo que hay que atender hoy (mismo criterio que la lista "Para hoy").
+function needsAttention(l) {
+  if (l.status.startsWith('cerrado')) return false;
+  if (l.action_due) return true;
+  if (l.status === 'asignado' && daysSince(l.created_at) > 0.04) return true;
+  return l.status === 'cotizado' && ['pendiente', 'urgente'].includes(l.followup_status);
+}
+// Color de la tarjeta en la barra de su columna (como Odoo): rojo = urgente,
+// amarillo = pendiente, verde = con próximo paso al día, gris = nada.
+function heat(l) {
+  if (l.status.startsWith('cerrado')) return 'none';
+  if (l.action_due || l.followup_status === 'urgente' || (l.status === 'asignado' && daysSince(l.created_at) > 1)) return 'red';
+  if (needsAttention(l)) return 'amber';
+  if (l.next_action_at) return 'green';
+  return 'none';
+}
+const HEAT_CLS = { red: 'bg-error', amber: 'bg-[#E9A23B]', green: 'bg-status-good', none: 'bg-outline-variant' };
+
+// A qué etapas se puede arrastrar una tarjeta (el embudo solo avanza).
+const MOVES = {
+  asignado: ['contactado', 'cotizado', 'cerrado_ganado', 'cerrado_perdido'],
+  contactado: ['cotizado', 'cerrado_ganado', 'cerrado_perdido'],
+  cotizado: ['cerrado_ganado', 'cerrado_perdido'],
+};
+const STAGE_LABEL = { asignado: 'Nuevos', contactado: 'Contactados', cotizado: 'Cotizados', cerrado_ganado: 'Ganados', cerrado_perdido: 'Perdidos' };
+
+const AVATAR_COLORS = ['#E4572E', '#2A7F8F', '#8E6BBF', '#3F9C6B', '#C7420E', '#3E7CB1', '#B5487A', '#D9922E'];
+function avatarColor(id) {
+  return AVATAR_COLORS[(Number(id) || 0) % AVATAR_COLORS.length];
+}
+
 export async function mount(container, ctx) {
   let data = { rows: [] };
-  let q = '';
-  let showLost = false;
+  let advisors = [];
+  let view = 'kanban';
+  let lostOpen = false;
+  let typed = '';
+  let panelOpen = false;
+  let suggestIdx = 0;
+  // Chips activos: { kind: 'text', field, value } | { kind: 'filter', key } | { kind: 'advisor', id, name }
+  let facets = [];
+  const myAdvisor = ctx.user?.advisor_id || null;
+  const isManager = ctx.user?.role !== 'asesor';
+
+  // Filtros del panel, por grupos (como Odoo): dentro de un grupo se suman
+  // ("o"), entre grupos se cruzan ("y").
+  const FILTER_GROUPS = [
+    [
+      ...(myAdvisor ? [['mine', 'Mi flujo', (l) => l.assigned_advisor_id === myAdvisor]] : []),
+      ...(isManager ? [['unassigned', 'Sin asignar', (l) => !l.assigned_advisor_id]] : []),
+    ],
+    [
+      ['today', 'Para hoy', needsAttention],
+      ['with_quote', 'Con cotización', (l) => !!l.quotation],
+    ],
+    [
+      ['open', 'En curso', (l) => !l.status.startsWith('cerrado')],
+      ['won', 'Ganados', (l) => l.status === 'cerrado_ganado'],
+      ['lost', 'Perdidos', (l) => l.status === 'cerrado_perdido'],
+    ],
+  ].filter((g) => g.length);
+  const FILTERS = new Map(FILTER_GROUPS.flat().map((f) => [f[0], f]));
+
+  // Desde Equipos u otra pantalla: #/embudo?advisor=3&filter=today
+  const pAdvisor = Number(ctx.routeParams.get('advisor'));
+  const pFilter = ctx.routeParams.get('filter');
+  const pView = ctx.routeParams.get('view');
+  if (pFilter && FILTERS.has(pFilter)) facets.push({ kind: 'filter', key: pFilter });
+  if (pView === 'list') view = 'list';
 
   async function load() {
     try {
@@ -83,170 +184,474 @@ export async function mount(container, ctx) {
     } catch (err) {
       ctx.toast(err.message, 'error');
     }
-    render();
+    renderBoard();
   }
 
-  // Lo que hay que hacer hoy: recordatorios vencidos, nuevos sin contestar y
-  // cotizaciones sin seguimiento.
-  function pendingOf(rows) {
-    const open = rows.filter((l) => !l.status.startsWith('cerrado'));
-    return [
-      ...open.filter((l) => l.action_due).map((l) => ({ l, why: l.next_action_note || 'Próximo paso de hoy', icon: 'alarm', urgent: true })),
-      ...open.filter((l) => !l.action_due && l.status === 'asignado' && daysSince(l.created_at) > 0.04).map((l) => ({ l, why: `Escribió ${ago(l.created_at)} y no se ha contestado`, icon: 'mark_chat_unread', urgent: daysSince(l.created_at) > 1 })),
-      ...open
-        .filter((l) => !l.action_due && l.status === 'cotizado' && ['pendiente', 'urgente'].includes(l.followup_status))
-        .map((l) => ({ l, why: `Cotizado ${ago(l.quoted_at)}${l.followup_count ? ` · ${l.followup_count} seguimiento(s)` : ''}: hacer seguimiento`, icon: 'notifications_active', urgent: l.followup_status === 'urgente' })),
-    ];
+  function applyFacets(rows, extraText) {
+    const groupsOn = FILTER_GROUPS.map((g) => g.filter(([k]) => facets.some((f) => f.kind === 'filter' && f.key === k))).filter((g) => g.length);
+    const advisorIds = facets.filter((f) => f.kind === 'advisor').map((f) => f.id);
+    const byField = new Map();
+    for (const f of facets.filter((x) => x.kind === 'text')) byField.set(f.field, [...(byField.get(f.field) || []), f.value]);
+    return rows.filter((l) => {
+      if (advisorIds.length && !advisorIds.includes(l.assigned_advisor_id)) return false;
+      for (const g of groupsOn) if (!g.some(([, , fn]) => fn(l))) return false;
+      for (const [field, values] of byField) if (!values.some((v) => matchesText(l, field, v))) return false;
+      if (extraText && !matchesText(l, 'all', extraText)) return false;
+      return true;
+    });
   }
 
-  function render() {
-    const term = q.toLowerCase();
-    const rows = data.rows.filter((l) => !term || [l.client_name, l.phone, l.product, l.quotation?.number].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
-    const open = rows.filter((l) => !l.status.startsWith('cerrado'));
-    const won = rows.filter((l) => l.status === 'cerrado_ganado');
-    const lost = rows.filter((l) => l.status === 'cerrado_perdido');
-    const pending = pendingOf(rows);
-    const quotedValue = open.filter((l) => l.status === 'cotizado').reduce((s, l) => s + (l.quotation?.amount_total || 0), 0);
-    const wonValue = won.reduce((s, l) => s + (Number(l.amount) || 0), 0);
-    const closedCount = won.length + lost.length;
-
-    container.innerHTML = `
-      <div class="flex justify-between items-end mb-gutter flex-wrap gap-3">
-        <div>
-          <h2 class="text-headline-lg font-headline-lg text-on-surface">Ventas</h2>
-          <p class="text-body-md text-on-surface-variant mt-1">Cada cliente interesado, desde que escribe hasta que compra.</p>
+  // ---- panel de control (Nuevo · título · buscador · vistas) -------------------
+  // De borde a borde, como Odoo: barra de control blanca con borde abajo y,
+  // debajo, el tablero sobre el gris de la ventana (se anula el padding de
+  // la vista solo aquí).
+  // Sin el relleno de la vista: la barra y el tablero van de borde a borde
+  // (app.js lo vuelve a poner al cambiar de pantalla).
+  container.classList.add('!p-0');
+  container.innerHTML = `
+    <div class="min-h-full flex flex-col bg-shell">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-2.5 bg-surface border-b border-outline-variant">
+        <div class="flex items-center gap-2.5 shrink-0">
+          <button id="em-new" class="btn btn-primary !h-8 !px-3">Nuevo</button>
+          <h2 class="text-[17px] font-normal text-on-surface">Flujo</h2>
         </div>
-        <div class="flex gap-2 flex-wrap">
-          <button id="em-new" class="btn btn-primary"><span class="material-symbols-outlined">person_add</span>Nuevo cliente</button>
-          <a href="#/cotizar" class="btn btn-secondary"><span class="material-symbols-outlined">request_quote</span>Cotizar</a>
+        <div id="em-search" class="relative order-last sm:order-none basis-full sm:basis-auto flex-1 sm:max-w-[600px] sm:mx-auto"></div>
+        <div class="flex items-center gap-3 shrink-0 ml-auto sm:ml-0">
+          <span id="em-pager" class="hidden md:inline text-[13px] text-on-surface-variant tabular-nums"></span>
+          <div class="flex rounded-md border border-outline-variant overflow-hidden" role="group" aria-label="Vista">
+            <button type="button" data-view="kanban" class="w-9 h-8 inline-flex items-center justify-center text-on-surface-variant" title="Tarjetas" aria-label="Vista en tarjetas"><span class="material-symbols-outlined text-[19px]">view_kanban</span></button>
+            <button type="button" data-view="list" class="w-9 h-8 inline-flex items-center justify-center text-on-surface-variant border-l border-outline-variant" title="Lista" aria-label="Vista en lista"><span class="material-symbols-outlined text-[19px]">view_list</span></button>
+          </div>
         </div>
       </div>
+      <div id="em-board" class="flex-1 flex flex-col"></div>
+    </div>`;
+  const searchEl = container.querySelector('#em-search');
+  const boardEl = container.querySelector('#em-board');
 
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-gutter">
-        ${stat('En conversación', open.length, `${open.filter((l) => l.status === 'asignado').length} sin contactar`)}
-        ${stat('Cotizado por cerrar', formatMoney(quotedValue), `${open.filter((l) => l.status === 'cotizado').length} cotización(es)`)}
-        ${stat('Vendido (30 días)', formatMoney(wonValue), `${won.length} venta(s)`)}
-        ${stat('Cierre (30 días)', closedCount ? `${Math.round((won.length / closedCount) * 100)} %` : '—', `${won.length} de ${closedCount} cerrados`)}
-      </div>
-
-      ${pending.length ? `
-      <section class="${CARD} mb-gutter overflow-hidden">
-        <header class="px-4 py-3 border-b border-outline-variant flex items-center justify-between">
-          <p class="text-body-md font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary">today</span>Para hoy</p>
-          <span class="text-[12px] text-on-surface-variant">${pending.length} pendiente(s)</span>
-        </header>
-        <div class="divide-y divide-outline-variant">
-          ${pending.slice(0, 8).map(({ l, why, icon, urgent }) => `
-            <div class="flex items-center gap-3 px-4 py-2.5 flex-wrap">
-              <span class="material-symbols-outlined text-[20px] ${urgent ? 'text-error' : 'text-on-surface-variant'}">${icon}</span>
-              <button data-open="${l.id}" class="min-w-0 flex-1 text-left">
-                <span class="block text-body-sm font-bold text-on-surface truncate">${escapeHtml(l.client_name)}</span>
-                <span class="block text-[12px] ${urgent ? 'text-error' : 'text-on-surface-variant'} truncate">${escapeHtml(why)}</span>
-              </button>
-              ${waLink(l.phone) ? `<a href="${waLink(l.phone)}" target="_blank" rel="noopener" class="btn btn-secondary !px-3 !py-1.5"><span class="material-symbols-outlined">chat</span>WhatsApp</a>` : ''}
-            </div>`).join('')}
-        </div>
-      </section>` : ''}
-
-      <div class="flex flex-wrap gap-2 mb-gutter items-center">
-        <input id="em-q" type="search" value="${escapeHtml(q)}" placeholder="Buscar cliente, teléfono, cotización…" class="p-2 bg-surface-container-lowest border border-outline-variant rounded-md text-body-sm outline-none focus:border-outline flex-1 min-w-[200px] max-w-md" />
-        <label class="flex items-center gap-2 text-body-sm text-on-surface-variant"><input id="em-lost" type="checkbox" ${showLost ? 'checked' : ''} /> Ver perdidos (${lost.length})</label>
-      </div>
-
-      <div class="flex lg:grid lg:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-margin-mobile px-margin-mobile sm:mx-0 sm:px-0">
-        ${STAGES.map((s) => {
-          const list = rows.filter((l) => l.status === s.key);
-          return `
-          <section class="snap-start shrink-0 w-[85vw] sm:w-[320px] lg:w-auto bg-surface-container-low rounded-xl p-3 flex flex-col min-h-[200px]">
-            <header class="flex items-center justify-between px-1 pb-3">
-              <span class="flex items-center gap-2 text-body-sm font-bold text-on-surface"><span class="material-symbols-outlined text-[18px]">${s.icon}</span>${s.label}</span>
-              <span class="text-[12px] text-on-surface-variant">${list.length}</span>
-            </header>
-            <div class="flex flex-col gap-2">
-              ${list.length ? list.map(cardHtml).join('') : `<p class="text-[12px] text-on-surface-variant text-center py-6">${s.key === 'cerrado_ganado' ? 'Sin ventas en los últimos 30 días.' : 'Nada aquí.'}</p>`}
-            </div>
-          </section>`;
-        }).join('')}
-      </div>
-
-      ${showLost ? `
-      <section class="${CARD} mt-gutter overflow-hidden">
-        <header class="px-4 py-3 border-b border-outline-variant text-body-md font-bold text-on-surface">Perdidos (30 días)</header>
-        ${lost.length ? `<div class="divide-y divide-outline-variant">${lost.map((l) => `
-          <button data-open="${l.id}" class="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-surface-container-low">
-            <span class="min-w-0"><span class="block text-body-sm font-bold text-on-surface truncate">${escapeHtml(l.client_name)}</span><span class="block text-[12px] text-on-surface-variant truncate">${escapeHtml(l.product || '')}${l.lost_reason ? ` · ${escapeHtml(l.lost_reason)}` : ''}</span></span>
-            <span class="text-[12px] text-on-surface-variant shrink-0">${ago(l.closed_at)}</span>
-          </button>`).join('')}</div>` : '<p class="px-4 py-6 text-body-sm text-on-surface-variant">Ninguno.</p>'}
-        ${lost.length ? lostSummary(lost) : ''}
-      </section>` : ''}`;
-
-    container.querySelector('#em-new').addEventListener('click', openNewLead);
-    let t;
-    container.querySelector('#em-q').addEventListener('input', (e) => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        q = e.target.value.trim();
-        render();
-        const el = container.querySelector('#em-q');
-        el.focus();
-        el.setSelectionRange(el.value.length, el.value.length);
-      }, 250);
+  container.querySelector('#em-new').addEventListener('click', openNewLead);
+  container.querySelectorAll('[data-view]').forEach((b) =>
+    b.addEventListener('click', () => {
+      view = b.dataset.view;
+      paintViewButtons();
+      renderBoard();
+    })
+  );
+  function paintViewButtons() {
+    container.querySelectorAll('[data-view]').forEach((b) => {
+      const on = b.dataset.view === view;
+      b.classList.toggle('bg-surface-container-high', on);
+      b.classList.toggle('text-on-surface', on);
+      b.classList.toggle('text-on-surface-variant', !on);
+      b.setAttribute('aria-pressed', String(on));
     });
-    container.querySelector('#em-lost').addEventListener('change', (e) => {
-      showLost = e.target.checked;
-      render();
+  }
+  paintViewButtons();
+
+  function chipLabel(group) {
+    if (group.kind === 'filter') return { icon: 'filter_alt', text: group.items.map((f) => FILTERS.get(f.key)?.[1] || f.key).join(' o ') };
+    if (group.kind === 'advisor') return { icon: 'person', text: `Vendedor: ${group.items.map((f) => f.name).join(' o ')}` };
+    const field = SEARCH_FIELDS.find(([k]) => k === group.field)?.[1] || '';
+    return { icon: 'search', text: `${group.field === 'all' ? '' : `${field}: `}${group.items.map((f) => f.value).join(' o ')}` };
+  }
+  // Un chip por grupo de filtros, por vendedor y por campo de búsqueda.
+  function chipGroups() {
+    const out = [];
+    for (const g of FILTER_GROUPS) {
+      const items = facets.filter((f) => f.kind === 'filter' && g.some(([k]) => k === f.key));
+      if (items.length) out.push({ kind: 'filter', items, keys: items.map((f) => f.key) });
+    }
+    const adv = facets.filter((f) => f.kind === 'advisor');
+    if (adv.length) out.push({ kind: 'advisor', items: adv });
+    for (const [field] of SEARCH_FIELDS) {
+      const items = facets.filter((f) => f.kind === 'text' && f.field === field);
+      if (items.length) out.push({ kind: 'text', field, items });
+    }
+    return out;
+  }
+  function removeGroup(g) {
+    facets = facets.filter((f) => !g.items.includes(f));
+  }
+
+  function renderSearch() {
+    const groups = chipGroups();
+    searchEl.innerHTML = `
+      <div class="flex items-center gap-1 flex-wrap min-h-[34px] pl-2.5 pr-9 py-0.5 rounded-md border border-outline-variant bg-surface focus-within:border-outline">
+        <span class="material-symbols-outlined text-[18px] text-on-surface-variant" aria-hidden="true">search</span>
+        ${groups
+          .map((g, i) => {
+            const { icon, text } = chipLabel(g);
+            return `<span class="inline-flex items-center gap-1 h-6 pl-1.5 pr-1 rounded-md bg-surface-container-high text-[12px] text-on-surface max-w-full">
+              <span class="material-symbols-outlined text-[14px] text-on-surface-variant" aria-hidden="true">${icon}</span><span class="truncate">${escapeHtml(text)}</span>
+              <button type="button" data-chip="${i}" class="w-4 h-4 inline-flex items-center justify-center rounded hover:bg-surface-container-highest" aria-label="Quitar filtro ${escapeHtml(text)}"><span class="material-symbols-outlined text-[14px]">close</span></button>
+            </span>`;
+          })
+          .join('')}
+        <input id="em-q" type="text" autocomplete="off" value="${escapeHtml(typed)}" placeholder="${groups.length ? '' : 'Buscar cliente, cotización, teléfono…'}" aria-label="Buscar en el flujo" class="flex-1 min-w-[120px] h-7 bg-transparent outline-none text-body-sm" />
+      </div>
+      <button type="button" id="em-toggle" aria-expanded="${panelOpen}" aria-label="Filtros y vendedores" class="absolute right-1 top-1 w-7 h-7 rounded-md inline-flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low"><span class="material-symbols-outlined text-[20px]">${panelOpen ? 'arrow_drop_up' : 'arrow_drop_down'}</span></button>
+      <div id="em-pop"></div>`;
+
+    const input = searchEl.querySelector('#em-q');
+    searchEl.querySelectorAll('[data-chip]').forEach((b) =>
+      b.addEventListener('click', () => {
+        removeGroup(groups[Number(b.dataset.chip)]);
+        refresh();
+        searchEl.querySelector('#em-q')?.focus();
+      })
+    );
+    searchEl.querySelector('#em-toggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      panelOpen = !panelOpen;
+      typed = input.value;
+      renderSearch();
     });
-    container.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', () => openLead(data.rows.find((l) => l.id === Number(el.dataset.open)))));
-    container.querySelectorAll('[data-act]').forEach((b) =>
+    input.addEventListener('input', () => {
+      typed = input.value;
+      suggestIdx = 0;
+      panelOpen = false;
+      paintPop();
+      renderBoard();
+      searchEl.querySelector('#em-toggle .material-symbols-outlined').textContent = 'arrow_drop_down';
+    });
+    input.addEventListener('keydown', (e) => {
+      const term = input.value.trim();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (term) addText(SEARCH_FIELDS[suggestIdx][0], term);
+      } else if (e.key === 'ArrowDown' && term) {
+        e.preventDefault();
+        suggestIdx = (suggestIdx + 1) % SEARCH_FIELDS.length;
+        paintPop();
+      } else if (e.key === 'ArrowUp' && term) {
+        e.preventDefault();
+        suggestIdx = (suggestIdx - 1 + SEARCH_FIELDS.length) % SEARCH_FIELDS.length;
+        paintPop();
+      } else if (e.key === 'Backspace' && !input.value && groups.length) {
+        removeGroup(groups[groups.length - 1]);
+        refresh();
+        searchEl.querySelector('#em-q')?.focus();
+      } else if (e.key === 'Escape') {
+        panelOpen = false;
+        typed = '';
+        input.value = '';
+        paintPop();
+        renderBoard();
+      }
+    });
+    paintPop();
+  }
+
+  function addText(field, value) {
+    facets.push({ kind: 'text', field, value });
+    typed = '';
+    suggestIdx = 0;
+    refresh();
+    searchEl.querySelector('#em-q')?.focus();
+  }
+
+  // Desplegable debajo del buscador: sugerencias de búsqueda mientras se
+  // escribe, o el panel de filtros y vendedores con el botón ▾.
+  function paintPop() {
+    const pop = searchEl.querySelector('#em-pop');
+    if (!pop) return;
+    const term = typed.trim();
+    const box = 'absolute left-0 right-0 top-full mt-1 z-40 rounded-xl bg-surface shadow-[var(--shadow-pop)] overflow-hidden';
+    if (term && !panelOpen) {
+      pop.innerHTML = `<div class="${box} py-1" role="listbox">
+        ${SEARCH_FIELDS.map(
+          ([k, label], i) => `<button type="button" data-sug="${k}" role="option" aria-selected="${i === suggestIdx}" class="w-full text-left px-3 py-1.5 text-body-sm ${i === suggestIdx ? 'bg-surface-container-low' : 'hover:bg-surface-container-low'}">
+            Buscar <b>${label}</b> para: <i class="not-italic font-semibold text-on-surface">${escapeHtml(term)}</i>
+          </button>`
+        ).join('')}
+      </div>`;
+      pop.querySelectorAll('[data-sug]').forEach((b) =>
+        b.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          addText(b.dataset.sug, term);
+        })
+      );
+      return;
+    }
+    if (!panelOpen) {
+      pop.innerHTML = '';
+      return;
+    }
+    const isOn = (k) => facets.some((f) => f.kind === 'filter' && f.key === k);
+    const advOn = (id) => facets.some((f) => f.kind === 'advisor' && f.id === id);
+    const counts = (fn) => data.rows.filter(fn).length;
+    const item = (attr, label, on, count) => `
+      <button type="button" ${attr} class="w-full text-left px-3 py-1.5 text-body-sm flex items-center gap-2 hover:bg-surface-container-low">
+        <span class="material-symbols-outlined text-[16px] ${on ? 'text-on-surface' : 'text-transparent'}" aria-hidden="true">check</span>
+        <span class="flex-1 ${on ? 'font-semibold text-on-surface' : 'text-on-surface-variant'}">${escapeHtml(label)}</span>
+        ${count != null ? `<span class="text-[11px] text-outline">${count}</span>` : ''}
+      </button>`;
+    pop.innerHTML = `<div class="${box} grid grid-cols-1 ${isManager && advisors.length ? 'sm:grid-cols-2' : ''} divide-y sm:divide-y-0 sm:divide-x divide-outline-variant">
+      <div class="py-2">
+        <p class="px-3 pb-1 text-[11px] font-semibold text-on-surface flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">filter_alt</span>Filtros</p>
+        ${FILTER_GROUPS.map((g, gi) => `${gi ? '<div class="my-1 mx-3 border-t border-outline-variant"></div>' : ''}${g.map(([k, label, fn]) => item(`data-flt="${k}"`, label, isOn(k), counts(fn))).join('')}`).join('')}
+      </div>
+      ${
+        isManager && advisors.length
+          ? `<div class="py-2">
+               <p class="px-3 pb-1 text-[11px] font-semibold text-on-surface flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">person</span>Vendedor</p>
+               ${advisors.map((a) => item(`data-adv="${a.id}"`, a.name, advOn(a.id), counts((l) => l.assigned_advisor_id === a.id))).join('')}
+             </div>`
+          : ''
+      }
+    </div>`;
+    pop.querySelectorAll('[data-flt]').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();
-        const lead = data.rows.find((l) => l.id === Number(b.dataset.id));
-        act(b.dataset.act, lead);
+        const k = b.dataset.flt;
+        facets = isOn(k) ? facets.filter((f) => !(f.kind === 'filter' && f.key === k)) : [...facets, { kind: 'filter', key: k }];
+        refresh();
+      })
+    );
+    pop.querySelectorAll('[data-adv]').forEach((b) =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = Number(b.dataset.adv);
+        const a = advisors.find((x) => x.id === id);
+        facets = advOn(id) ? facets.filter((f) => !(f.kind === 'advisor' && f.id === id)) : [...facets, { kind: 'advisor', id, name: a.name }];
+        refresh();
       })
     );
   }
 
-  function stat(label, value, hint) {
-    return `
-      <div class="${CARD} p-4 min-w-0">
-        <p class="eyebrow !text-[10px] text-on-surface-variant mb-2">${label}</p>
-        <p class="text-[20px] leading-7 font-bold tracking-tight text-on-surface truncate">${value}</p>
-        <p class="text-[11px] text-on-surface-variant mt-1 truncate">${hint}</p>
+  function refresh() {
+    renderSearch();
+    renderBoard();
+  }
+
+  function onDocClick(e) {
+    if (!searchEl.contains(e.target) && (panelOpen || typed)) {
+      if (panelOpen) {
+        panelOpen = false;
+        renderSearch();
+      } else {
+        const pop = searchEl.querySelector('#em-pop');
+        if (pop) pop.innerHTML = '';
+      }
+    }
+  }
+  document.addEventListener('click', onDocClick);
+
+  // ---- tablero ------------------------------------------------------------------
+  function renderBoard() {
+    const rows = applyFacets(data.rows, typed.trim());
+    const pager = container.querySelector('#em-pager');
+    if (pager) pager.textContent = rows.length ? `1-${rows.length} / ${rows.length}` : '0 / 0';
+    if (view === 'list') return renderList(rows);
+    // Columnas como Odoo: ~300 px, separadas 24 px, título en negrita con
+    // "+" a la derecha, barra fina con el total y tarjetas apiladas.
+    const column = (s, foldable = false) => {
+      const list = rows.filter((l) => l.status === s.key);
+      const total = list.reduce((sum, l) => sum + (s.key === 'cerrado_ganado' ? Number(l.amount) || 0 : l.quotation?.amount_total || 0), 0);
+      const tally = { red: 0, amber: 0, green: 0, none: 0 };
+      list.forEach((l) => tally[heat(l)]++);
+      const bar = list.length
+        ? ['green', 'amber', 'red', 'none']
+            .filter((k) => tally[k])
+            .map((k) => `<span class="${HEAT_CLS[k]} h-full" style="width:${(tally[k] / list.length) * 100}%" title="${tally[k]}"></span>`)
+            .join('')
+        : '';
+      return `
+        <section data-drop="${s.key}" class="em-col shrink-0 w-[85vw] sm:w-[300px] flex flex-col transition-colors rounded-sm">
+          <header class="pt-1 pb-2.5">
+            <div class="flex items-center justify-between gap-2 h-7">
+              <h3 class="text-[15px] font-semibold text-on-surface truncate">${s.label}</h3>
+              ${s.key === 'asignado' ? '<button type="button" data-quick class="w-7 h-7 inline-flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high" aria-label="Nuevo cliente" title="Nuevo cliente"><span class="material-symbols-outlined text-[20px]">add</span></button>' : ''}
+              ${foldable ? '<button type="button" data-fold class="w-7 h-7 inline-flex items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high" aria-label="Plegar Perdidos" title="Plegar"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>' : ''}
+            </div>
+            <div class="flex items-center gap-3 mt-1">
+              <div class="flex-1 h-[7px] rounded-sm bg-surface-container-high overflow-hidden flex">${bar}</div>
+              <span class="text-[12px] tabular-nums w-auto text-right ${total || list.length ? 'font-semibold text-on-surface' : 'text-outline'}">${total ? formatMoney(total) : list.length}</span>
+            </div>
+          </header>
+          <div class="flex flex-col flex-1 min-h-[160px]">
+            ${list.map(cardHtml).join('')}
+          </div>
+        </section>`;
+    };
+    const lostList = rows.filter((l) => l.status === 'cerrado_perdido');
+    boardEl.innerHTML = `
+      <div class="flex-1 flex gap-6 overflow-x-auto px-3 sm:px-4 pt-3 pb-6 items-stretch" title="Arrastra una tarjeta a otra columna para avanzarla">
+        ${STAGES.map((s) => column(s)).join('')}
+        ${
+          lostOpen
+            ? column({ key: 'cerrado_perdido', label: 'Perdidos' }, true)
+            : `<button type="button" data-drop="cerrado_perdido" data-fold class="em-col shrink-0 w-9 self-start flex flex-col items-center gap-3 pt-2 pb-4 rounded-sm text-on-surface-variant hover:bg-surface-container-high transition-colors" title="Perdidos (últimos 30 días)" aria-label="Ver Perdidos">
+                 <span class="text-[12px] font-semibold tabular-nums">${lostList.length}</span>
+                 <span class="text-[15px] font-semibold [writing-mode:vertical-rl]">Perdidos</span>
+               </button>`
+        }
       </div>`;
+
+    boardEl.querySelector('[data-quick]')?.addEventListener('click', openNewLead);
+    boardEl.querySelectorAll('[data-fold]').forEach((el) =>
+      el.addEventListener('click', () => {
+        lostOpen = !lostOpen;
+        renderBoard();
+      })
+    );
+    wireCards();
+    wireDnd();
   }
 
-  function lostSummary(lost) {
-    const counts = {};
-    for (const l of lost) counts[l.lost_reason || 'Sin motivo'] = (counts[l.lost_reason || 'Sin motivo'] || 0) + 1;
-    return `<p class="px-4 py-3 border-t border-outline-variant text-[12px] text-on-surface-variant">Por qué se pierden: ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${escapeHtml(k)} (${n})`).join(' · ')}</p>`;
+  // Lista como la de Odoo: de borde a borde, filas de 41 px con borde abajo,
+  // casilla a la izquierda y el total del valor al pie.
+  function renderList(rows) {
+    const th = 'h-10 px-3 text-left text-[13.5px] font-semibold text-on-surface whitespace-nowrap';
+    const td = 'h-[41px] px-3 whitespace-nowrap';
+    const value = (l) => (l.status === 'cerrado_ganado' ? Number(l.amount) || 0 : l.quotation?.amount_total || 0);
+    const total = rows.reduce((s, l) => s + value(l), 0);
+    boardEl.innerHTML = `
+      <div class="flex-1 overflow-x-auto bg-surface">
+        <table class="w-full text-[13.5px]">
+          <thead class="border-b border-outline-variant"><tr>
+            <th class="w-10 pl-3 sm:pl-4"><input type="checkbox" aria-label="Seleccionar todos" class="align-middle" /></th>
+            <th class="${th}">Oportunidad</th><th class="${th}">Teléfono</th><th class="${th}">Correo electrónico</th>
+            <th class="${th}">Vendedor</th><th class="${th} text-right">Ingreso esperado</th><th class="${th}">Etapa</th><th class="${th}">Próximo paso</th>
+          </tr></thead>
+          <tbody>
+            ${
+              rows.length
+                ? rows
+                    .map(
+                      (l) => `<tr data-open="${l.id}" class="border-b border-outline-variant cursor-pointer hover:bg-surface-container-low">
+                        <td class="pl-3 sm:pl-4" data-stop><input type="checkbox" aria-label="Seleccionar ${escapeHtml(l.client_name)}" class="align-middle" /></td>
+                        <td class="${td} text-on-surface">${escapeHtml([l.quotation?.number, l.client_name].filter(Boolean).join(' · '))}<span class="text-on-surface-variant">${l.product ? ` · ${escapeHtml(l.product)}` : ''}</span></td>
+                        <td class="${td} text-on-surface">${escapeHtml(l.phone || '')}</td>
+                        <td class="${td} text-on-surface">${escapeHtml(l.email || '')}</td>
+                        <td class="${td} text-on-surface"><span class="inline-flex items-center gap-2"><span class="w-6 h-6 rounded text-white text-[11px] font-semibold inline-flex items-center justify-center" style="background:${l.assigned_advisor_id ? avatarColor(l.assigned_advisor_id) : '#A7A9AC'}">${escapeHtml((l.advisor_name || '?').slice(0, 1).toUpperCase())}</span>${escapeHtml(l.advisor_name || 'Sin asignar')}</span></td>
+                        <td class="${td} text-right tabular-nums text-on-surface">${formatMoney(value(l))}</td>
+                        <td class="${td} font-semibold text-on-surface uppercase text-[13px]">${STAGE_LABEL[l.status] || l.status}</td>
+                        <td class="${td} ${l.action_due ? 'text-error' : 'text-on-surface-variant'}">${l.next_action_at ? `${shortDate(l.next_action_at)}${l.next_action_note ? ` · ${escapeHtml(l.next_action_note)}` : ''}` : ''}</td>
+                      </tr>`
+                    )
+                    .join('')
+                : '<tr><td colspan="8" class="px-4 py-10 text-center text-on-surface-variant">Ningún cliente coincide con la búsqueda.</td></tr>'
+            }
+          </tbody>
+          ${rows.length ? `<tfoot><tr><td></td><td colspan="4"></td><td class="${td} text-right tabular-nums font-semibold text-on-surface">${formatMoney(total)}</td><td colspan="2"></td></tr></tfoot>` : ''}
+        </table>
+      </div>`;
+    wireCards();
   }
 
+  function wireCards() {
+    boardEl.querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', () => openLead(data.rows.find((l) => l.id === Number(el.dataset.open)))));
+  }
+
+  // ---- arrastrar y soltar --------------------------------------------------------
+  // Con el mouse se arrastra la tarjeta a otra columna; en teléfono se abre la
+  // tarjeta y se usan sus botones (Ya le escribí, Cotizar, Ganado, Perdido).
+  let dragLead = null;
+  function wireDnd() {
+    boardEl.querySelectorAll('[draggable="true"]').forEach((card) => {
+      card.addEventListener('dragstart', (e) => {
+        dragLead = data.rows.find((l) => l.id === Number(card.dataset.open));
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(dragLead?.id || ''));
+        requestAnimationFrame(() => card.classList.add('opacity-40'));
+        const ok = MOVES[dragLead?.status] || [];
+        boardEl.querySelectorAll('[data-drop]').forEach((col) => {
+          if (col.dataset.drop !== dragLead?.status && !ok.includes(col.dataset.drop)) col.classList.add('opacity-50');
+        });
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('opacity-40');
+        boardEl.querySelectorAll('[data-drop]').forEach((col) => col.classList.remove('opacity-50', 'bg-surface-container-high', 'ring-2', 'ring-outline'));
+        dragLead = null;
+      });
+    });
+    boardEl.querySelectorAll('[data-drop]').forEach((col) => {
+      const allowed = () => dragLead && (MOVES[dragLead.status] || []).includes(col.dataset.drop);
+      col.addEventListener('dragover', (e) => {
+        if (!allowed()) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        col.classList.add('bg-surface-container-high', 'ring-2', 'ring-outline');
+      });
+      col.addEventListener('dragleave', (e) => {
+        if (!col.contains(e.relatedTarget)) col.classList.remove('bg-surface-container-high', 'ring-2', 'ring-outline');
+      });
+      col.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const lead = dragLead;
+        col.classList.remove('bg-surface-container-high', 'ring-2', 'ring-outline');
+        if (lead && allowed()) moveLead(lead, col.dataset.drop);
+      });
+    });
+  }
+
+  async function moveLead(lead, to) {
+    if (to === 'contactado') return act('contact', lead);
+    if (to === 'cerrado_ganado') return openWon(lead);
+    if (to === 'cerrado_perdido') return openLost(lead);
+    if (to === 'cotizado') {
+      openModal({
+        title: `Cotizado · ${escapeHtml(lead.client_name)}`,
+        variant: 'center',
+        render: (body, { close }) => {
+          body.innerHTML = `
+            <p class="text-body-sm text-on-surface-variant mb-4">${escapeHtml(lead.client_name)} todavía no tiene una cotización en el CRM.</p>
+            <div class="flex flex-col gap-2">
+              <button type="button" id="mv-quote" class="btn btn-primary justify-center"><span class="material-symbols-outlined">request_quote</span>Hacer la cotización</button>
+              <button type="button" id="mv-mark" class="btn btn-secondary justify-center">Solo pasarlo a Cotizados</button>
+            </div>`;
+          body.querySelector('#mv-quote').addEventListener('click', () => {
+            close();
+            ctx.navigate('cotizar', { lead: lead.id });
+          });
+          body.querySelector('#mv-mark').addEventListener('click', async () => {
+            try {
+              await ctx.api.patch(`/api/leads/${lead.id}/quote`, {});
+              ctx.toast(`${lead.client_name} → Cotizados`, 'success');
+              close();
+              load();
+            } catch (err) {
+              ctx.toast(err.message, 'error');
+            }
+          });
+        },
+      });
+    }
+  }
+
+  // Tarjeta como en Odoo: esquinas casi rectas, apiladas sin espacio (los
+  // bordes se tocan), título en negrita, servicio y cotización debajo y, en
+  // la fila de abajo, el reloj del próximo paso y la inicial del vendedor.
   function cardHtml(l) {
     const quote = l.quotation;
-    const followupWarn = l.status === 'cotizado' && ['pendiente', 'urgente'].includes(l.followup_status);
-    const actions = {
-      asignado: [['contact', 'Ya le escribí', 'check'], ['quote', 'Cotizar', 'request_quote']],
-      contactado: [['quote', 'Cotizar', 'request_quote']],
-      cotizado: [['won', 'Ganado', 'emoji_events'], ['followup', 'Seguimiento', 'notifications']],
-      cerrado_ganado: [],
-    }[l.status] || [];
+    const closed = l.status.startsWith('cerrado');
+    const value = l.status === 'cerrado_ganado' ? Number(l.amount) || 0 : quote?.amount_total || 0;
+    const h = heat(l);
+    const clockCls = l.action_due ? 'text-error' : l.next_action_at ? 'text-status-good' : 'text-on-surface-variant';
+    const clockTitle = l.next_action_at ? `${shortDate(l.next_action_at)}${l.next_action_note ? ` · ${l.next_action_note}` : ''}` : 'Sin próximo paso';
+    const title = [quote?.number, l.client_name].filter(Boolean).join(' · ');
+    const note =
+      l.status === 'cotizado' && ['pendiente', 'urgente'].includes(l.followup_status) && !l.next_action_at
+        ? `<p class="text-[12px] mt-0.5 ${l.followup_status === 'urgente' ? 'text-error' : 'text-[#B7791F]'}">Falta seguimiento</p>`
+        : l.status === 'asignado' && daysSince(l.created_at) > 0.04
+          ? `<p class="text-[12px] mt-0.5 ${h === 'red' ? 'text-error' : 'text-[#B7791F]'}">Escribió ${ago(l.created_at)}, sin contestar</p>`
+          : l.status === 'cerrado_perdido' && l.lost_reason
+            ? `<p class="text-[12px] mt-0.5 text-on-surface-variant truncate">${escapeHtml(l.lost_reason)}</p>`
+            : '';
     return `
-      <article data-open="${l.id}" class="${CARD} p-3 cursor-pointer hover:border-on-surface transition-colors">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <p class="text-body-sm font-bold text-on-surface leading-snug truncate">${escapeHtml(l.client_name)}</p>
-            <p class="text-[12px] text-on-surface-variant truncate">${escapeHtml(l.product || 'Sin servicio definido')}</p>
-          </div>
-          ${waLink(l.phone) ? `<a href="${waLink(l.phone)}" target="_blank" rel="noopener" data-stop class="shrink-0 w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface hover:bg-surface-container-low" aria-label="Escribir por WhatsApp"><span class="material-symbols-outlined text-[16px]">chat</span></a>` : ''}
+      <article data-open="${l.id}" ${closed ? '' : 'draggable="true"'} class="relative -mt-px first:mt-0 bg-surface border border-outline-variant px-2.5 pt-2 pb-2 ${closed ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} hover:z-10 hover:shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition-shadow">
+        <p class="text-[14px] font-semibold text-on-surface leading-snug">${escapeHtml(title)}</p>
+        <p class="text-[13px] text-on-surface-variant truncate">${escapeHtml(l.product || 'Sin servicio definido')}</p>
+        ${value ? `<p class="text-[13px] text-on-surface tabular-nums">${formatMoney(value)}</p>` : ''}
+        ${note}
+        ${l.status === 'cerrado_ganado' && l.work_order ? `<a href="#/trabajos?id=${l.work_order.id}" data-stop class="inline-flex items-center gap-1 text-[12px] underline text-on-surface"><span class="material-symbols-outlined text-[14px]">construction</span>${escapeHtml(l.work_order.number)}</a>` : ''}
+        <div class="flex items-center gap-2 mt-1.5">
+          <span class="material-symbols-outlined text-[18px] ${clockCls}" title="${escapeHtml(clockTitle)}" aria-label="${escapeHtml(clockTitle)}">schedule</span>
+          ${waLink(l.phone) ? `<a href="${waLink(l.phone)}" target="_blank" rel="noopener" data-stop class="text-on-surface-variant hover:text-on-surface" title="Escribir por WhatsApp" aria-label="Escribir por WhatsApp"><span class="material-symbols-outlined text-[18px]">chat</span></a>` : ''}
+          <span class="ml-auto text-[11.5px] text-outline">${closed ? ago(l.closed_at) : ago(l.created_at)}</span>
+          <span class="w-6 h-6 rounded text-white text-[12px] font-semibold flex items-center justify-center" style="background:${l.assigned_advisor_id ? avatarColor(l.assigned_advisor_id) : '#A7A9AC'}" title="${escapeHtml(l.advisor_name || 'Sin asignar')}">${escapeHtml((l.advisor_name || '?').slice(0, 1).toUpperCase())}</span>
         </div>
-        ${quote ? `<p class="text-[12px] text-on-surface mt-2"><span class="text-on-surface-variant">${escapeHtml(quote.number || 'Cotización')}</span> · <b>${formatMoney(quote.amount_total)}</b></p>` : ''}
-        ${l.status === 'cerrado_ganado' ? `<p class="text-[12px] text-on-surface mt-2"><b>${formatMoney(l.amount)}</b> · ${ago(l.closed_at)}</p>${l.work_order ? `<a href="#/trabajos?id=${l.work_order.id}" data-stop class="inline-flex items-center gap-1 text-[12px] underline text-on-surface mt-1"><span class="material-symbols-outlined text-[14px]">construction</span>${escapeHtml(l.work_order.number)}</a>` : `<button data-act="job" data-id="${l.id}" class="text-[12px] underline text-on-surface mt-1">Crear trabajo</button>`}` : ''}
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px]">
-          ${l.status !== 'cerrado_ganado' ? `<span class="text-on-surface-variant">${l.status === 'cotizado' ? `cotizado ${ago(l.quoted_at)}` : `entró ${ago(l.created_at)}`}</span>` : ''}
-          ${l.next_action_at && l.status !== 'cerrado_ganado' ? `<span class="flex items-center gap-0.5 ${l.action_due ? 'text-error font-bold' : 'text-on-surface'}"><span class="material-symbols-outlined text-[13px]">alarm</span>${shortDate(l.next_action_at)}${l.next_action_note ? ` · ${escapeHtml(l.next_action_note)}` : ''}</span>` : ''}
-          ${followupWarn && !l.next_action_at ? `<span class="${l.followup_status === 'urgente' ? 'text-error font-bold' : 'text-on-surface'}">Falta seguimiento</span>` : ''}
-        </div>
-        ${actions.length ? `<div class="flex gap-1.5 mt-3">${actions.map(([a, label, icon]) => `<button data-act="${a}" data-id="${l.id}" class="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-full border border-outline-variant text-[12px] font-semibold text-on-surface hover:bg-on-surface hover:text-surface hover:border-on-surface transition-colors"><span class="material-symbols-outlined text-[15px]">${icon}</span>${label}</button>`).join('')}</div>` : ''}
       </article>`;
   }
 
@@ -352,7 +757,10 @@ export async function mount(container, ctx) {
           <div class="flex flex-wrap gap-2 justify-between">
             <div class="flex flex-wrap gap-2">
               ${waLink(lead.phone) ? `<a href="${waLink(lead.phone, `Hola ${lead.client_name}, te escribo de VELARA.`)}" target="_blank" rel="noopener" class="btn btn-secondary"><span class="material-symbols-outlined">chat</span>WhatsApp</a>` : ''}
+              ${lead.status === 'asignado' ? '<button data-x="contact" class="btn btn-secondary"><span class="material-symbols-outlined">check</span>Ya le escribí</button>' : ''}
               ${!closed ? `<button data-x="quote" class="btn btn-secondary"><span class="material-symbols-outlined">request_quote</span>${lead.quotation ? 'Nueva cotización' : 'Cotizar'}</button>` : ''}
+              ${lead.status === 'cotizado' ? '<button data-x="followup" class="btn btn-secondary"><span class="material-symbols-outlined">notifications</span>Seguimiento</button>' : ''}
+              ${lead.status === 'cerrado_ganado' && !lead.work_order ? '<button data-x="job" class="btn btn-secondary"><span class="material-symbols-outlined">construction</span>Crear trabajo</button>' : ''}
               ${!closed ? '<button data-x="won" class="btn btn-primary"><span class="material-symbols-outlined">emoji_events</span>Ganado</button>' : ''}
               ${!closed ? '<button data-x="lost" class="btn btn-ghost">Perdido</button>' : ''}
             </div>
@@ -381,6 +789,7 @@ export async function mount(container, ctx) {
             const x = b.dataset.x;
             close();
             if (x === 'quote') ctx.navigate('cotizar', { lead: lead.id });
+            else if (x === 'contact' || x === 'followup' || x === 'job') act(x, lead);
             else if (x === 'won') openWon(lead);
             else if (x === 'lost') openLost(lead);
             else if (x === 'edit') openEditLeadModal(lead, ctx, load);
@@ -496,7 +905,21 @@ export async function mount(container, ctx) {
     if (e.target.closest('[data-stop]')) e.stopPropagation();
   }, true);
 
+  if (isManager) {
+    try {
+      advisors = (await ctx.api.get('/api/advisors')).filter((a) => !a.is_group);
+    } catch {
+      advisors = [];
+    }
+  }
+  const fromParam = advisors.find((a) => a.id === pAdvisor);
+  if (fromParam) facets.push({ kind: 'advisor', id: fromParam.id, name: fromParam.name });
+  renderSearch();
+
   const offs = ['leads_changed', 'jobs_changed'].map((ev) => ctx.ws.on(ev, load));
   await load();
-  return () => offs.forEach((off) => off());
+  return () => {
+    offs.forEach((off) => off());
+    document.removeEventListener('click', onDocClick);
+  };
 }

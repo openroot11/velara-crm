@@ -7,6 +7,9 @@
 
 const COLOR_OPTIONS = ['Negro', 'Café', 'Gris', 'Beige', 'Blanco', 'Personalizado'];
 const MATERIAL_OPTIONS = ['Cuero sintético premium', 'Tela técnica deportiva', 'Cuerina', 'Neopreno', 'Cuero genuino'];
+// Los forros para carros son en tela (no llevan sintéticos): en una sola
+// tela, combinados o abullonados con diseño.
+const FORRO_TELA_OPTIONS = ['Una sola tela', 'Combinado', 'Abullonado con diseño'];
 
 export const SERVICES = [
   {
@@ -23,7 +26,7 @@ export const SERVICES = [
         required: true,
         options: ['Forro completo (sillas, espaldar y cabeceras)', 'Solo asientos delanteros', 'Solo banca trasera', 'Juego completo'],
       },
-      { key: 'material', label: 'Material', type: 'select', options: MATERIAL_OPTIONS },
+      { key: 'material', label: 'Tela', type: 'select', options: FORRO_TELA_OPTIONS },
       { key: 'color', label: 'Color', type: 'select', options: COLOR_OPTIONS },
     ],
   },
